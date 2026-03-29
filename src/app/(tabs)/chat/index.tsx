@@ -1,14 +1,18 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, TextInput } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { TelegramColors } from '@/constants/colors';
 
-export default function ContactsScreen() {
-  const [searchText, setSearchText] = React.useState('');
+export default function ChatsScreen() {
+  const [searchText, setSearchText] = useState('');
 
-  const handleAddContactPress = () => {
-    console.log('Add contact pressed');
+  const handleEditPress = () => {
+    console.log('Edit button pressed');
+  };
+
+  const handleComposePress = () => {
+    console.log('Compose button pressed');
   };
 
   return (
@@ -17,12 +21,14 @@ export default function ContactsScreen() {
         <StatusBar barStyle="dark-content" backgroundColor="#F7F7F7" />
 
         <View style={styles.header}>
-          <View style={styles.leftSpacer} />
+          <TouchableOpacity onPress={handleEditPress} style={styles.editButton}>
+            <Text style={styles.editText}>Edit</Text>
+          </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Contacts</Text>
+          <Text style={styles.headerTitle}>Chats</Text>
 
-          <TouchableOpacity onPress={handleAddContactPress} style={styles.addButton}>
-            <Ionicons name="person-add-outline" size={28} color={TelegramColors.primary} />
+          <TouchableOpacity onPress={handleComposePress} style={styles.composeButton}>
+            <Ionicons name="create-outline" size={28} color={TelegramColors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -46,9 +52,9 @@ export default function ContactsScreen() {
 
         <View style={styles.contentArea}>
           <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={64} color="#CCCCCC" />
-            <Text style={styles.emptyText}>Nội dung Contacts sẽ được thêm ở đây</Text>
-            <Text style={styles.emptySubtext}>Team sẽ code tiếp phần danh sách contacts</Text>
+            <Ionicons name="chatbubbles-outline" size={64} color="#CCCCCC" />
+            <Text style={styles.emptyText}>Nội dung chat sẽ được thêm ở đây</Text>
+            <Text style={styles.emptySubtext}>Team sẽ code tiếp phần danh sách chat</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -76,9 +82,15 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5E5',
     height: 44,
   },
-  leftSpacer: {
-    width: 32,
-    height: 32,
+  editButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    zIndex: 10,
+  },
+  editText: {
+    color: TelegramColors.primary,
+    fontSize: 17,
+    fontWeight: '400',
   },
   headerTitle: {
     fontSize: 17,
@@ -89,7 +101,7 @@ const styles = StyleSheet.create({
     right: 0,
     textAlign: 'center',
   },
-  addButton: {
+  composeButton: {
     paddingVertical: 4,
     paddingHorizontal: 4,
     zIndex: 10,
