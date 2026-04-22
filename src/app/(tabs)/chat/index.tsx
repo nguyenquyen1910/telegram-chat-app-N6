@@ -3,6 +3,76 @@ import { View, Text, TouchableOpacity, StyleSheet, TextInput, StatusBar } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { TelegramColors } from '@/constants/colors';
+<<<<<<< Updated upstream
+=======
+import { MOCK_OTHER_USER, MOCK_MESSAGES, formatMessageTime } from '@/constants/chat';
+
+const MOCK_CHATS = [
+  {
+    id: 'conv_1',
+    user: MOCK_OTHER_USER,
+    lastMessage: MOCK_MESSAGES[MOCK_MESSAGES.length - 1],
+    unreadCount: 0,
+  },
+];
+
+interface ChatListItemProps {
+  chat: (typeof MOCK_CHATS)[0];
+  onPress: () => void;
+}
+
+function ChatListItem({ chat, onPress }: ChatListItemProps) {
+  const lastMsgText =
+    chat.lastMessage.type === 'image' ? '📷 Ảnh' : chat.lastMessage.text;
+
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.chatItem} activeOpacity={0.6}>
+      {/* Avatar */}
+      {chat.user.avatarUrl ? (
+        <Image source={{ uri: chat.user.avatarUrl }} style={styles.chatAvatar} />
+      ) : (
+        <View style={styles.chatAvatarPlaceholder}>
+          <Text style={styles.chatAvatarLetter}>
+            {chat.user.displayName.charAt(0)}
+          </Text>
+        </View>
+      )}
+
+      {/* Content */}
+      <View style={styles.chatContent}>
+        <View style={styles.chatTopRow}>
+          <Text style={styles.chatName} numberOfLines={1}>
+            {chat.user.displayName}
+          </Text>
+          <Text style={styles.chatTime}>
+            {formatMessageTime(chat.lastMessage.createdAt)}
+          </Text>
+        </View>
+
+        <View style={styles.chatBottomRow}>
+          {chat.lastMessage.senderId === 'user_me' && (
+            <Ionicons
+              name="checkmark-done"
+              size={16}
+              color="#21C004"
+              style={{ marginRight: 4 }}
+            />
+          )}
+          <Text style={styles.chatLastMsg} numberOfLines={1}>
+            {lastMsgText}
+          </Text>
+
+          {chat.unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>{chat.unreadCount}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+>>>>>>> Stashed changes
 
 export default function ChatsScreen() {
   const [searchText, setSearchText] = useState('');
@@ -21,11 +91,16 @@ export default function ChatsScreen() {
         <StatusBar barStyle="dark-content" backgroundColor="#F7F7F7" />
 
         <View style={styles.header}>
+<<<<<<< Updated upstream
           <TouchableOpacity onPress={handleEditPress} style={styles.editButton}>
             <Text style={styles.editText}>Edit</Text>
+=======
+          <TouchableOpacity style={styles.headerBtn}>
+            <Text style={styles.editText}>Sửa</Text>
+>>>>>>> Stashed changes
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Chats</Text>
+          <Text style={styles.headerTitle}>Tin nhắn</Text>
 
           <TouchableOpacity onPress={handleComposePress} style={styles.composeButton}>
             <Ionicons name="create-outline" size={28} color={TelegramColors.primary} />
@@ -37,7 +112,7 @@ export default function ChatsScreen() {
             <Ionicons name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search"
+              placeholder="Tìm kiếm"
               placeholderTextColor="#8E8E93"
               value={searchText}
               onChangeText={setSearchText}

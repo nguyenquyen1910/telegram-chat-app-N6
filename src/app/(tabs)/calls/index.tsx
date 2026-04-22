@@ -17,7 +17,7 @@ export default function CallsScreen() {
         <View style={styles.header}>
           <View style={styles.leftSpacer} />
 
-          <Text style={styles.headerTitle}>Calls</Text>
+          <Text style={styles.headerTitle}>Cuộc gọi</Text>
 
           <TouchableOpacity onPress={handleAddCallPress} style={styles.addButton}>
             <Ionicons name="add-circle-outline" size={28} color={TelegramColors.primary} />
@@ -27,8 +27,8 @@ export default function CallsScreen() {
         <View style={styles.contentArea}>
           <View style={styles.emptyState}>
             <Ionicons name="call-outline" size={64} color="#CCCCCC" />
-            <Text style={styles.emptyText}>Nội dung Calls sẽ được thêm ở đây</Text>
-            <Text style={styles.emptySubtext}>Team sẽ code tiếp phần lịch sử cuộc gọi</Text>
+            <Text style={styles.emptyText}>Lịch sử cuộc gọi sẽ hiển thị ở đây</Text>
+            <Text style={styles.emptySubtext}>Chưa có cuộc gọi nào</Text>
           </View>
         </View>
       </SafeAreaView>

@@ -19,7 +19,7 @@ export default function ContactsScreen() {
         <View style={styles.header}>
           <View style={styles.leftSpacer} />
 
-          <Text style={styles.headerTitle}>Contacts</Text>
+          <Text style={styles.headerTitle}>Danh bạ</Text>
 
           <TouchableOpacity onPress={handleAddContactPress} style={styles.addButton}>
             <Ionicons name="person-add-outline" size={28} color={TelegramColors.primary} />
@@ -31,7 +31,7 @@ export default function ContactsScreen() {
             <Ionicons name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search"
+              placeholder="Tìm kiếm"
               placeholderTextColor="#8E8E93"
               value={searchText}
               onChangeText={setSearchText}
@@ -47,8 +47,8 @@ export default function ContactsScreen() {
         <View style={styles.contentArea}>
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={64} color="#CCCCCC" />
-            <Text style={styles.emptyText}>Nội dung Contacts sẽ được thêm ở đây</Text>
-            <Text style={styles.emptySubtext}>Team sẽ code tiếp phần danh sách contacts</Text>
+            <Text style={styles.emptyText}>Danh bạ sẽ được hiển thị ở đây</Text>
+            <Text style={styles.emptySubtext}>Chưa có liên hệ nào</Text>
           </View>
         </View>
       </SafeAreaView>
