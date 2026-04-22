@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { TelegramColors } from '@/constants/colors';
 import { MOCK_OTHER_USER, MOCK_MESSAGES, formatMessageTime } from '@/constants/chat';
-main
 
 const MOCK_CHATS = [
   {
@@ -32,7 +31,7 @@ interface ChatListItemProps {
 
 function ChatListItem({ chat, onPress }: ChatListItemProps) {
   const lastMsgText =
-    chat.lastMessage.type === 'image' ? '📷 Photo' : chat.lastMessage.text;
+    chat.lastMessage.type === 'image' ? '📷 Ảnh' : chat.lastMessage.text;
 
   return (
     <TouchableOpacity onPress={onPress} style={styles.chatItem} activeOpacity={0.6}>
@@ -93,11 +92,8 @@ export default function ChatsScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleEditPress} style={styles.editButton}>
-            <Text style={styles.editText}>Edit</Text>
           <TouchableOpacity style={styles.headerBtn}>
             <Text style={styles.editText}>Sửa</Text>
- Stashed changes
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Tin nhắn</Text>
