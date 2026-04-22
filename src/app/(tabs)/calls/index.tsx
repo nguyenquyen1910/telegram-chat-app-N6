@@ -1,19 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { TelegramColors } from '@/constants/colors';
 
-export default function SettingsScreen() {
-  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
-  const userAvatar = null;
-
-  const handleAvatarPress = () => {
-    console.log('Avatar pressed');
-  };
-
-  const handleEditPress = () => {
-    console.log('Edit pressed');
+export default function CallsScreen() {
+  const handleAddCallPress = () => {
+    console.log('Add call pressed');
   };
 
   return (
@@ -22,26 +15,20 @@ export default function SettingsScreen() {
         <StatusBar barStyle="dark-content" backgroundColor="#F7F7F7" />
 
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleAvatarPress} style={styles.avatarButton}>
-            {userAvatar ? (
-              <Image source={{ uri: userAvatar }} style={styles.avatar} />
-            ) : (
-              <Ionicons name="person-circle" size={32} color="#8E8E93" />
-            )}
-          </TouchableOpacity>
+          <View style={styles.leftSpacer} />
 
-          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={styles.headerTitle}>Calls</Text>
 
-          <TouchableOpacity onPress={handleEditPress} style={styles.editButton}>
-            <Text style={styles.editText}>Edit</Text>
+          <TouchableOpacity onPress={handleAddCallPress} style={styles.addButton}>
+            <Ionicons name="add-circle-outline" size={28} color={TelegramColors.primary} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.contentArea}>
           <View style={styles.emptyState}>
-            <Ionicons name="settings-outline" size={64} color="#CCCCCC" />
-            <Text style={styles.emptyText}>Nội dung Settings sẽ được thêm ở đây</Text>
-            <Text style={styles.emptySubtext}>Team sẽ code tiếp phần settings</Text>
+            <Ionicons name="call-outline" size={64} color="#CCCCCC" />
+            <Text style={styles.emptyText}>Nội dung Calls sẽ được thêm ở đây</Text>
+            <Text style={styles.emptySubtext}>Team sẽ code tiếp phần lịch sử cuộc gọi</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -69,37 +56,24 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5E5',
     height: 44,
   },
-  avatarButton: {
+  leftSpacer: {
     width: 32,
     height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-    marginTop: 0,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '600',
     color: '#000000',
+    flex: 1,
+    textAlign: 'center',
     position: 'absolute',
     left: 0,
     right: 0,
-    textAlign: 'center',
   },
-  editButton: {
+  addButton: {
     paddingVertical: 4,
     paddingHorizontal: 4,
     zIndex: 10,
-  },
-  editText: {
-    color: TelegramColors.primary,
-    fontSize: 17,
-    fontWeight: '400',
   },
   contentArea: {
     flex: 1,

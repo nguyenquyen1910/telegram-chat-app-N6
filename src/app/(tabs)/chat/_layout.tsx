@@ -5,11 +5,18 @@ export default function ChatLayout() {
     <Stack>
       <Stack.Screen
         name="index"
-        options={{ title: 'Chats', headerShown: true }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="[chatId]"
-        options={{ title: 'Chat', headerShown: true }}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="user-profile"
+        options={{
+          headerShown: false,
+          presentation: 'card',
+        }}
       />
     </Stack>
   );
