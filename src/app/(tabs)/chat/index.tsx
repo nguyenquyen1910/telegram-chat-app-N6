@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { TelegramColors } from '@/constants/colors';
 import { MOCK_OTHER_USER, MOCK_MESSAGES, formatMessageTime } from '@/constants/chat';
+main
 
 const MOCK_CHATS = [
   {
@@ -92,11 +93,14 @@ export default function ChatsScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.headerBtn}>
+          <TouchableOpacity onPress={handleEditPress} style={styles.editButton}>
             <Text style={styles.editText}>Edit</Text>
+          <TouchableOpacity style={styles.headerBtn}>
+            <Text style={styles.editText}>Sửa</Text>
+ Stashed changes
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Chats</Text>
+          <Text style={styles.headerTitle}>Tin nhắn</Text>
 
           <TouchableOpacity style={styles.headerBtn}>
             <Ionicons name="create-outline" size={28} color={TelegramColors.primary} />
@@ -109,7 +113,7 @@ export default function ChatsScreen() {
             <Ionicons name="search" size={20} color="#8E8E93" style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search"
+              placeholder="Tìm kiếm"
               placeholderTextColor="#8E8E93"
               value={searchText}
               onChangeText={setSearchText}

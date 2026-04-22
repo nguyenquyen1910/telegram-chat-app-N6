@@ -30,18 +30,18 @@ export default function SettingsScreen() {
             )}
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={styles.headerTitle}>Cài đặt</Text>
 
           <TouchableOpacity onPress={handleEditPress} style={styles.editButton}>
-            <Text style={styles.editText}>Edit</Text>
+            <Text style={styles.editText}>Sửa</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.contentArea}>
           <View style={styles.emptyState}>
             <Ionicons name="settings-outline" size={64} color="#CCCCCC" />
-            <Text style={styles.emptyText}>Nội dung Settings sẽ được thêm ở đây</Text>
-            <Text style={styles.emptySubtext}>Team sẽ code tiếp phần settings</Text>
+            <Text style={styles.emptyText}>Cài đặt sẽ được hiển thị ở đây</Text>
+            <Text style={styles.emptySubtext}>Chưa có cài đặt nào</Text>
           </View>
         </View>
       </SafeAreaView>

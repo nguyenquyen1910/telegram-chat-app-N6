@@ -42,7 +42,7 @@ export default function ChatDetailScreen() {
       const replyTo = replyingTo
         ? {
             messageId: replyingTo.id,
-            text: replyingTo.type === 'image' ? '📷 Photo' : replyingTo.text,
+            text: replyingTo.type === 'image' ? '📷 Ảnh' : replyingTo.text,
             senderName: isOutgoing(replyingTo)
               ? currentUser.displayName
               : otherUser?.displayName || 'User',

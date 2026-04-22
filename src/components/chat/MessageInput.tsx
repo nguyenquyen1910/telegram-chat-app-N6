@@ -27,7 +27,7 @@ export default function MessageInput({
       {replyingTo && (
         <ReplyPreview
           senderName={replyingSenderName || 'User'}
-          messageText={replyingTo.type === 'image' ? '📷 Photo' : replyingTo.text}
+          messageText={replyingTo.type === 'image' ? '📷 Ảnh' : replyingTo.text}
           onCancel={onCancelReply}
         />
       )}
@@ -44,7 +44,7 @@ export default function MessageInput({
           <TextInput
             ref={inputRef}
             style={styles.textInput}
-            placeholder="Message"
+            placeholder="Tin nhắn"
             placeholderTextColor="#AEAEB2"
             value={text}
             onChangeText={setText}

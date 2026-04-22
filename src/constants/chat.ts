@@ -185,19 +185,19 @@ export function formatMessageTime(timestamp: Timestamp): string {
 }
 
 export function formatLastSeen(timestamp: Timestamp | null, isOnline: boolean): string {
-  if (isOnline) return 'online';
-  if (!timestamp) return 'last seen recently';
+  if (isOnline) return 'trực tuyến';
+  if (!timestamp) return 'truy cập gần đây';
   
   const now = Date.now();
   const diff = now - timestamp.toMillis();
   const minutes = Math.floor(diff / (60 * 1000));
   
-  if (minutes < 1) return 'last seen just now';
-  if (minutes < 60) return `last seen ${minutes}m ago`;
+  if (minutes < 1) return 'vừa truy cập';
+  if (minutes < 60) return `truy cập ${minutes} phút trước`;
   
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `last seen ${hours}h ago`;
+  if (hours < 24) return `truy cập ${hours} giờ trước`;
   
   const date = timestamp.toDate();
-  return `last seen ${date.toLocaleDateString()}`;
+  return `truy cập ${date.toLocaleDateString('vi-VN')}`;
 }

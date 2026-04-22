@@ -122,7 +122,7 @@ export async function sendMessage(
   const convRef = doc(firestore, 'conversations', conversationId);
   batch.update(convRef, {
     lastMessage: {
-      text: type === 'image' ? '📷 Photo' : text,
+      text: type === 'image' ? '📷 Ảnh' : text,
       senderId,
       timestamp: serverTimestamp(),
       type,

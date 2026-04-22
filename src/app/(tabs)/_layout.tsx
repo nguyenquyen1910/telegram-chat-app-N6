@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, View, StyleSheet } from 'react-native';
+import CustomTabBar from '../../components/CustomTabBar';
 
 export default function TabsLayout() {
   const userAvatar = null;
@@ -12,11 +13,12 @@ export default function TabsLayout() {
         tabBarActiveTintColor: '#54A5E8',
         tabBarInactiveTintColor: '#8E8E93',
       }}
+      tabBar={(props) => <CustomTabBar {...props} />}
     >
       <Tabs.Screen
         name="contacts"
         options={{
-          title: 'Contacts',
+          title: 'Danh bạ',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "person" : "person-outline"}
@@ -30,7 +32,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="calls"
         options={{
-          title: 'Calls',
+          title: 'Cuộc gọi',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "call" : "call-outline"}
@@ -44,7 +46,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: 'Chats',
+          title: 'Tin nhắn',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "chatbubbles" : "chatbubbles-outline"}
@@ -58,7 +60,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: 'Cài đặt',
           tabBarIcon: ({ color, size, focused }) => (
             <View style={styles.avatarContainer}>
               {userAvatar ? (

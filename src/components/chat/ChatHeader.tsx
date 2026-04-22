@@ -23,7 +23,7 @@ export default function ChatHeader({
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="chevron-back" size={28} color="#037EE5" />
-          <Text style={styles.backText}>Chats</Text>
+          <Text style={styles.backText}>Tin nhắn</Text>
         </TouchableOpacity>
 
         {/* Center: Name + Status */}
@@ -35,7 +35,7 @@ export default function ChatHeader({
             {userName}
           </Text>
           <Text style={styles.statusText}>
-            {isOnline ? 'online' : lastSeen}
+            {isOnline ? 'trực tuyến' : lastSeen}
           </Text>
         </TouchableOpacity>
 
