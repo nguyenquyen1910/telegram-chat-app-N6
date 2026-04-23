@@ -211,7 +211,7 @@ export default function SettingsScreen() {
               label="Stickers"
               badge={15}
               isLast
-              onPress={() => console.log('[Settings] Stickers pressed')}
+              onPress={() => router.push('/(tabs)/settings/stickers')}
             />
           </View>
 
@@ -221,30 +221,32 @@ export default function SettingsScreen() {
               iconBg="#FF3B30"
               iconName="notifications"
               label="Notifications and Sounds"
-              onPress={() =>
-                console.log('[Settings] Notifications and Sounds pressed')
-              }
+              onPress={() => router.push('/(tabs)/settings/notifications')}
             />
             <SettingRow
               iconBg="#8E8E93"
               iconName="lock-closed"
               label="Privacy and Security"
-              onPress={() =>
-                console.log('[Settings] Privacy and Security pressed')
-              }
+              onPress={() => router.push('/(tabs)/settings/privacy')}
             />
             <SettingRow
               iconBg="#34C759"
               iconName="server"
               label="Data and Storage"
-              onPress={() => console.log('[Settings] Data and Storage pressed')}
+              onPress={() => router.push('/(tabs)/settings/data-storage')}
             />
             <SettingRow
               iconBg="#35AADB"
               iconName="brush"
               label="Appearance"
+              onPress={() => router.push('/(tabs)/settings/appearance')}
+            />
+            <SettingRow
+              iconBg="#FF9500"
+              iconName="language"
+              label="Language"
               isLast
-              onPress={() => console.log('[Settings] Appearance pressed')}
+              onPress={() => router.push('/(tabs)/settings/language')}
             />
           </View>
 
