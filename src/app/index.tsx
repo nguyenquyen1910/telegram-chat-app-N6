@@ -13,7 +13,7 @@ export default function Index() {
     );
   }
 
-  // Nếu đã đăng nhập → vào Chats, chưa → vào Welcome
+  // if authenticated → Chats, not authenticated → Welcome
   if (isAuthenticated) {
     return <Redirect href="/(tabs)/chat" />;
   }
