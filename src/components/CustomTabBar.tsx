@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
+import { CommonActions } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -41,12 +42,14 @@ function TabItem({
   label,
   routeName,
   isFocused,
+  badgeCount,
   onPress,
   onLongPress,
 }: {
   label: string;
   routeName: string;
   isFocused: boolean;
+  badgeCount?: number | string;
   onPress: () => void;
   onLongPress: () => void;
 }) {
@@ -88,11 +91,18 @@ function TabItem({
       style={styles.tabItem}
     >
       <Animated.View style={[styles.tabContent, animatedStyle]}>
-        <Ionicons
-          name={isFocused ? icons.focused : icons.unfocused}
-          size={24}
-          color={isFocused ? '#2196F3' : '#555555'}
-        />
+        <View>
+          <Ionicons
+            name={isFocused ? icons.focused : icons.unfocused}
+            size={24}
+            color={isFocused ? '#2196F3' : '#555555'}
+          />
+          {badgeCount !== undefined && (
+            <View style={styles.badgeContainer}>
+              <Text style={styles.badgeText}>{badgeCount}</Text>
+            </View>
+          )}
+        </View>
         <Text
           style={[
             styles.tabLabel,
@@ -161,6 +171,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
               label={label as string}
               routeName={route.name}
               isFocused={isFocused}
+              badgeCount={options.tabBarBadge as number | string | undefined}
               onPress={() => {
                 const event = navigation.emit({
                   type: 'tabPress',
@@ -169,6 +180,14 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                 });
                 if (!isFocused && !event.defaultPrevented) {
                   navigation.navigate(route.name, route.params);
+                } else if (isFocused && !event.defaultPrevented) {
+                  // Force reset stack to index when pressing active tab
+                  navigation.dispatch(
+                    CommonActions.reset({
+                      index: 0,
+                      routes: [{ name: route.name, state: { routes: [{ name: 'index' }] } }],
+                    })
+                  );
                 }
               }}
               onLongPress={() => {
@@ -259,5 +278,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 3,
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: '#FF3B30',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

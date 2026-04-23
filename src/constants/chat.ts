@@ -201,3 +201,114 @@ export function formatLastSeen(timestamp: Timestamp | null, isOnline: boolean): 
   const date = timestamp.toDate();
   return `truy cập ${date.toLocaleDateString('vi-VN')}`;
 }
+
+export function formatChatTime(timestamp: Timestamp | null): string {
+  if (!timestamp) return '';
+  const date = timestamp.toDate();
+  const now = new Date();
+  
+  if (date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  }
+  
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear()) {
+    return 'Hôm qua';
+  }
+  
+  const diffTime = Math.abs(now.getTime() - date.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+  if (diffDays < 7) {
+    const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    return days[date.getDay()];
+  }
+  
+  return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+}
+
+export const MOCK_USERS: User[] = [
+  MOCK_OTHER_USER,
+  {
+    uid: 'user_alex',
+    displayName: 'Alex',
+    phoneNumber: '+1 234 567',
+    avatarUrl: 'https://i.pravatar.cc/150?img=11',
+    bio: 'Designer',
+    lastSeen: Timestamp.now(),
+    isOnline: false,
+    createdAt: Timestamp.now(),
+  },
+  {
+    uid: 'user_mike',
+    displayName: 'Mike',
+    phoneNumber: '+1 987 654',
+    avatarUrl: '',
+    bio: '',
+    lastSeen: Timestamp.now(),
+    isOnline: true,
+    createdAt: Timestamp.now(),
+  }
+];
+
+export const MOCK_CHATS_LIST: any[] = [
+  {
+    conversation: {
+      id: 'conv_1',
+      participants: ['user_me', 'user_martha'],
+      lastMessage: { text: '', senderId: 'user_me', timestamp: Timestamp.fromMillis(now - 68 * minute), type: 'image' },
+      updatedAt: Timestamp.fromMillis(now - 68 * minute),
+      type: 'private',
+    },
+    otherUser: MOCK_OTHER_USER,
+    unreadCount: 0,
+  },
+  {
+    conversation: {
+      id: 'conv_2',
+      participants: ['user_me', 'user_alex'],
+      lastMessage: { text: 'Thanks for the design!', senderId: 'user_alex', timestamp: Timestamp.fromMillis(now - 120 * minute), type: 'text' },
+      updatedAt: Timestamp.fromMillis(now - 120 * minute),
+      type: 'private',
+    },
+    otherUser: MOCK_USERS[1],
+    unreadCount: 2,
+  },
+  {
+    conversation: {
+      id: 'conv_3',
+      participants: ['user_me', 'user_mike'],
+      lastMessage: { text: 'See you tomorrow', senderId: 'user_me', timestamp: Timestamp.fromMillis(now - 24 * 60 * minute), type: 'text' },
+      updatedAt: Timestamp.fromMillis(now - 24 * 60 * minute),
+      type: 'private',
+    },
+    otherUser: MOCK_USERS[2],
+    unreadCount: 0,
+  },
+  {
+    conversation: {
+      id: 'conv_group_1',
+      participants: ['user_me', 'user_martha', 'user_alex', 'user_mike'],
+      lastMessage: { text: 'Mọi người nhớ nộp báo cáo trước thứ 6 nhé!', senderId: 'user_alex', timestamp: Timestamp.fromMillis(now - 35 * minute), type: 'text' },
+      updatedAt: Timestamp.fromMillis(now - 35 * minute),
+      type: 'group',
+      groupName: 'Nhóm 6 - ĐAMH',
+      groupAvatar: '',
+    },
+    otherUser: undefined,
+    unreadCount: 5,
+  },
+  {
+    conversation: {
+      id: 'conv_group_2',
+      participants: ['user_me', 'user_martha', 'user_mike'],
+      lastMessage: { text: '📷 Ảnh', senderId: 'user_mike', timestamp: Timestamp.fromMillis(now - 3 * 24 * 60 * minute), type: 'image' },
+      updatedAt: Timestamp.fromMillis(now - 3 * 24 * 60 * minute),
+      type: 'group',
+      groupName: 'Team Design',
+      groupAvatar: 'https://i.pravatar.cc/150?img=50',
+    },
+    otherUser: undefined,
+    unreadCount: 0,
+  },
+];

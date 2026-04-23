@@ -102,3 +102,43 @@ export interface ReplyPreviewProps {
   /** Whether this is inline in a bubble (no cancel button) */
   isInBubble?: boolean;
 }
+
+// ==================== Chat List ====================
+export type ConversationFilter = 'all' | 'private' | 'group';
+
+export interface ChatListItemData {
+  conversation: Conversation;
+  otherUser?: User; // Cho private chat
+  unreadCount: number;
+}
+
+export interface AvatarProps {
+  imageUrl?: string;
+  name: string;
+  size?: 'small' | 'medium' | 'large';
+  isOnline?: boolean;
+  showOnlineIndicator?: boolean;
+}
+
+export interface BadgeProps {
+  count: number;
+  muted?: boolean;
+  style?: any;
+}
+
+export interface ChatItemProps {
+  item: ChatListItemData;
+  onPress: () => void;
+}
+
+export interface SearchBarProps {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+}
+
+export interface FilterTabsProps {
+  activeTab: ConversationFilter;
+  onTabChange: (tab: ConversationFilter) => void;
+  counts?: Record<ConversationFilter, number>;
+}

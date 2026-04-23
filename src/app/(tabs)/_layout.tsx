@@ -47,6 +47,7 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: 'Tin nhắn',
+          // Badge sẽ được tích hợp sau khi kết nối Firebase thật
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "chatbubbles" : "chatbubbles-outline"}
