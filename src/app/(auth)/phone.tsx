@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,8 +10,20 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
+import { sendOTP } from '@/services/auth';
+
+const firebaseConfig = {
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+};
 
 // List of popular countries
 const COUNTRIES = [
@@ -26,32 +37,50 @@ const COUNTRIES = [
 
 export default function PhoneScreen() {
   const router = useRouter();
+  const recaptchaVerifier = useRef<FirebaseRecaptchaVerifierModal>(null);
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const fullPhoneNumber = `${selectedCountry.code}${phoneNumber}`;
 
   const handleContinue = () => {
     if (phoneNumber.length < 9) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại hợp lệ');
+      Alert.alert('Error', 'Please enter a valid phone number');
       return;
     }
     setShowConfirm(true);
   };
 
-  const handleConfirmAndSend = () => {
+  const handleConfirmAndSend = async () => {
     setShowConfirm(false);
-    // Navigate to verify-code screen, passing phone number as params
-    router.push({
-      pathname: '/(auth)/verify-code',
-      params: { phoneNumber: fullPhoneNumber },
-    });
+    setIsSending(true);
+
+    try {
+      await sendOTP(fullPhoneNumber, recaptchaVerifier.current!);
+      router.push({
+        pathname: '/(auth)/verify-code',
+        params: { phoneNumber: fullPhoneNumber },
+      });
+    } catch (error: any) {
+      console.error('Send OTP error:', error);
+      Alert.alert('Error', error.message || 'Cannot send OTP. Please try again.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* reCAPTCHA Modal - invisible, auto shows when needed */}
+      <FirebaseRecaptchaVerifierModal
+        ref={recaptchaVerifier}
+        firebaseConfig={firebaseConfig}
+        attemptInvisibleVerification={true}
+      />
+
       <KeyboardAvoidingView
         style={styles.inner}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -114,6 +143,14 @@ export default function PhoneScreen() {
           </Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
+
+      {/* Loading overlay when sending OTP */}
+      {isSending && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.loadingText}>Sending code...</Text>
+        </View>
+      )}
 
       {/* Modal confirm phone number */}
       <Modal visible={showConfirm} transparent animationType="fade">
@@ -260,6 +297,18 @@ const styles = StyleSheet.create({
   },
   continueTextDisabled: {
     color: '#C7C7CC',
+  },
+  // Loading overlay
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#FFFFFF',
+    fontSize: 16,
   },
   // Modal confirm
   modalOverlay: {
