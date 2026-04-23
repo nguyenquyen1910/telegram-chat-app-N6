@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ function SettingRow({
 const TAB_BAR_HEIGHT = 83;
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   return (
     <View style={styles.screen}>
@@ -92,7 +94,7 @@ export default function SettingsScreen() {
             <Text style={styles.navTitle}>Settings</Text>
             <TouchableOpacity
               style={styles.editBtn}
-              onPress={() => console.log('[Settings] Edit pressed')}
+              onPress={() => router.push('/(tabs)/settings/edit-profile')}
             >
               <Text style={styles.editText}>Edit</Text>
             </TouchableOpacity>
