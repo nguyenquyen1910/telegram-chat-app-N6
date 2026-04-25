@@ -129,9 +129,10 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
     ],
   }));
 
-  // Hide tab bar on nested screens (chat detail, user profile, etc.)
-  const isNestedScreen = pathname.includes('/chat/') && pathname !== '/chat' && pathname !== '/chat/';
-  if (isNestedScreen) return null;
+  // Ẩn tab bar khi đang ở màn hình con (không phải trang chủ của tab)
+  const isChatNested = pathname.includes('/chat/') && pathname !== '/chat' && pathname !== '/chat/';
+  const isSettingsNested = pathname.includes('/settings/') && pathname !== '/settings' && pathname !== '/settings/';
+  if (isChatNested || isSettingsNested) return null;
 
   return (
     <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, 8) + 4 }]}>
