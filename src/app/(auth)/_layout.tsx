@@ -5,6 +5,7 @@ export default function AuthLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="welcome" />
       <Stack.Screen name="phone" />
+      <Stack.Screen name="enter-email" />
       <Stack.Screen name="verify-code" />
     </Stack>
   );

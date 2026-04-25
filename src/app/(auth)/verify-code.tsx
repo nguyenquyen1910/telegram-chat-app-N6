@@ -10,16 +10,19 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { sendOTP, verifyOTP } from '@/services/auth';
+import { verifyEmailOTP, resendEmailOTP } from '@/services/auth';
+
 const CODE_LENGTH = 6;
+
 export default function VerifyCodeScreen() {
-    const { phoneNumber } = useLocalSearchParams<{ phoneNumber: string }>();
+    const { phoneNumber, email } = useLocalSearchParams<{ phoneNumber: string; email: string }>();
     const router = useRouter();
     const [code, setCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [countdown, setCountdown] = useState(60);
     const inputRef = useRef<TextInput>(null);
-    // Countdown timer other send again OTP
+
+    // Countdown timer for resend
     useEffect(() => {
         if (countdown <= 0) return;
         const timer = setInterval(() => {
@@ -27,53 +30,74 @@ export default function VerifyCodeScreen() {
         }, 1000);
         return () => clearInterval(timer);
     }, [countdown]);
+
     // Auto focus input when open screen
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 300);
     }, []);
-    // When enter code → auto verify
+
+    // When enter full code → auto verify
     useEffect(() => {
         if (code.length === CODE_LENGTH) {
             handleVerify();
         }
     }, [code]);
+
     const handleVerify = async () => {
         if (code.length !== CODE_LENGTH) return;
         setIsLoading(true);
         try {
-            await verifyOTP(code);
-            // If success, AuthContext will auto detect user → redirect to (tabs)
+            await verifyEmailOTP(code);
+            // If success → redirect to main chat screen
             router.replace('/(tabs)/chat');
         } catch (error: any) {
-            Alert.alert('Wrong code', 'The verification code is incorrect. Please try again.');
+            Alert.alert('Sai mã', error.message || 'Mã xác thực không đúng. Vui lòng thử lại.');
             setCode('');
         } finally {
             setIsLoading(false);
         }
     };
+
     const handleResend = async () => {
-        if (countdown > 0 || !phoneNumber) return;
+        if (countdown > 0) return;
         try {
-            await sendOTP(phoneNumber);
+            await resendEmailOTP();
             setCountdown(60);
-            Alert.alert('Đã gửi', 'Mã OTP mới đã được gửi.');
+            Alert.alert('Đã gửi', 'Mã xác thực mới đã được gửi tới email của bạn.');
         } catch (error) {
             Alert.alert('Lỗi', 'Không thể gửi lại mã. Vui lòng thử lại.');
         }
     };
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.content}>
+                {/* Back button */}
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => router.back()}
+                >
+                    <Text style={styles.backText}>← Back</Text>
+                </TouchableOpacity>
+
                 {/* Header icon */}
                 <View style={styles.iconContainer}>
-                    <Text style={styles.lockIcon}>💬</Text>
+                    <Text style={styles.lockIcon}>📧</Text>
                 </View>
+
                 <Text style={styles.title}>Enter Code</Text>
                 <Text style={styles.subtitle}>
-                    We've sent an SMS with an activation code{'\n'}to your phone{' '}
-                    <Text style={styles.phoneText}>{phoneNumber}</Text>
+                    We've sent a verification code to{'\n'}
+                    <Text style={styles.emailText}>{email}</Text>
                 </Text>
-                {/* show code input */}
+
+                {/* Phone info */}
+                <View style={styles.phoneInfoRow}>
+                    <Text style={styles.phoneInfoLabel}>📞</Text>
+                    <Text style={styles.phoneInfoValue}>{phoneNumber}</Text>
+                </View>
+
+                {/* Code input boxes */}
                 <View style={styles.codeContainer}>
                     {Array.from({ length: CODE_LENGTH }).map((_, index) => (
                         <View
@@ -90,7 +114,8 @@ export default function VerifyCodeScreen() {
                         </View>
                     ))}
                 </View>
-                {/* Hidden real input for catch keyboard */}
+
+                {/* Hidden real input for keyboard */}
                 <TextInput
                     ref={inputRef}
                     style={styles.hiddenInput}
@@ -104,6 +129,7 @@ export default function VerifyCodeScreen() {
                     maxLength={CODE_LENGTH}
                     autoFocus
                 />
+
                 {/* Loading indicator */}
                 {isLoading && (
                     <ActivityIndicator
@@ -112,6 +138,7 @@ export default function VerifyCodeScreen() {
                         style={{ marginTop: 24 }}
                     />
                 )}
+
                 {/* Resend code button */}
                 <TouchableOpacity
                     style={styles.resendButton}
@@ -129,10 +156,16 @@ export default function VerifyCodeScreen() {
                             : 'Gửi lại mã'}
                     </Text>
                 </TouchableOpacity>
+
+                {/* Hint text */}
+                <Text style={styles.hintText}>
+                    💡 Check your email inbox (and spam folder) for the code.
+                </Text>
             </View>
         </SafeAreaView>
     );
 }
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -141,8 +174,18 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: 24,
-        paddingTop: 40,
+        paddingTop: 20,
         alignItems: 'center',
+    },
+    backButton: {
+        alignSelf: 'flex-start',
+        marginBottom: 16,
+        paddingVertical: 8,
+    },
+    backText: {
+        fontSize: 17,
+        color: '#007AFF',
+        fontWeight: '500',
     },
     iconContainer: {
         marginBottom: 16,
@@ -160,10 +203,28 @@ const styles = StyleSheet.create({
         color: '#8E8E93',
         textAlign: 'center',
         lineHeight: 20,
-        marginBottom: 32,
+        marginBottom: 16,
     },
-    phoneText: {
+    emailText: {
         fontWeight: '600',
+        color: '#007AFF',
+    },
+    phoneInfoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F2F2F7',
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        marginBottom: 24,
+    },
+    phoneInfoLabel: {
+        fontSize: 16,
+        marginRight: 8,
+    },
+    phoneInfoValue: {
+        fontSize: 15,
+        fontWeight: '500',
         color: '#000000',
     },
     codeContainer: {
@@ -211,5 +272,12 @@ const styles = StyleSheet.create({
     },
     resendTextDisabled: {
         color: '#C7C7CC',
+    },
+    hintText: {
+        fontSize: 13,
+        color: '#8E8E93',
+        textAlign: 'center',
+        marginTop: 16,
+        lineHeight: 18,
     },
 });
