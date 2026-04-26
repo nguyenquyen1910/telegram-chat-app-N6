@@ -1,12 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TextInput, TouchableOpacity, Image, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MessageInputProps } from '@/types/chat';
 import ReplyPreview from './ReplyPreview';
 
 export default function MessageInput({
   onSendText,
+  onPickImage,
   onSendImage,
+  pendingImage,
+  onCancelImage,
   replyingTo,
   replyingSenderName,
   onCancelReply,
@@ -14,8 +17,16 @@ export default function MessageInput({
   const [text, setText] = useState('');
   const inputRef = useRef<TextInput>(null);
   const hasText = text.trim().length > 0;
+  const hasPendingImage = !!pendingImage;
 
   const handleSend = () => {
+    if (hasPendingImage) {
+      // Gửi ảnh kèm caption
+      onSendImage(pendingImage!.uri, pendingImage!.fileName, text.trim());
+      setText('');
+      return;
+    }
+
     if (!hasText) return;
     onSendText(text.trim());
     setText('');
@@ -32,40 +43,61 @@ export default function MessageInput({
         />
       )}
 
-      {/* Input row */}
+      {/* Image preview bar - Telegram style */}
+      {hasPendingImage && (
+        <View style={styles.imagePreviewBar}>
+          <Image source={{ uri: pendingImage!.uri }} style={styles.previewThumb} />
+          <View style={styles.previewInfo}>
+            <Text style={styles.previewLabel}>Ảnh</Text>
+            <Text style={styles.previewFileName} numberOfLines={1}>
+              {pendingImage!.fileName}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={onCancelImage} style={styles.previewCancel}>
+            <Ionicons name="close-circle" size={22} color="#A8A8A8" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Input row - Telegram Write Bar layout */}
       <View style={styles.inputRow}>
-        {/* Attach button */}
-        <TouchableOpacity onPress={onSendImage} style={styles.iconButton}>
-          <Ionicons name="attach" size={26} color="#858E99" style={{ transform: [{ rotate: '-45deg' }] }} />
+        {/* Sticker/Emoji button */}
+        <TouchableOpacity style={styles.iconButton}>
+          <Ionicons name="happy-outline" size={26} color="#A8A8A8" />
         </TouchableOpacity>
 
-        {/* Input field */}
+        {/* Message field */}
         <View style={styles.inputWrapper}>
           <TextInput
             ref={inputRef}
             style={styles.textInput}
-            placeholder="Tin nhắn"
+            placeholder={hasPendingImage ? 'Thêm chú thích...' : 'Tin nhắn'}
             placeholderTextColor="#AEAEB2"
             value={text}
             onChangeText={setText}
             multiline
             returnKeyType="default"
           />
-          {!hasText && (
-            <TouchableOpacity style={styles.stickerButton}>
-              <Ionicons name="happy-outline" size={22} color="#858E99" />
-            </TouchableOpacity>
-          )}
         </View>
 
-        {/* Send or Mic */}
-        {hasText ? (
-          <TouchableOpacity onPress={handleSend} style={styles.iconButton}>
-            <Ionicons name="send" size={24} color="#037EE5" />
+        {/* Attach button */}
+        <TouchableOpacity onPress={onPickImage} style={styles.iconButton}>
+          <Ionicons
+            name="attach"
+            size={26}
+            color="#A8A8A8"
+            style={{ transform: [{ rotate: '-45deg' }] }}
+          />
+        </TouchableOpacity>
+
+        {/* Voice or Send button */}
+        {hasText || hasPendingImage ? (
+          <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
+            <Ionicons name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name="mic-outline" size={26} color="#858E99" />
+            <Ionicons name="mic-outline" size={26} color="#A8A8A8" />
           </TouchableOpacity>
         )}
       </View>
@@ -75,43 +107,80 @@ export default function MessageInput({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F6F6F6',
-    borderTopWidth: 0.5,
-    borderTopColor: 'rgba(166,166,170,0.3)',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 3,
   },
+  // ======= Image Preview =======
+  imagePreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E5E5E5',
+    backgroundColor: '#F9F9F9',
+  },
+  previewThumb: {
+    width: 42,
+    height: 42,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  previewInfo: {
+    flex: 1,
+  },
+  previewLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#50A8EB',
+  },
+  previewFileName: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginTop: 1,
+  },
+  previewCancel: {
+    padding: 4,
+  },
+  // ======= Input Row =======
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingTop: 6,
+    paddingHorizontal: 4,
+    paddingTop: 4,
     paddingBottom: 28,
   },
   iconButton: {
-    padding: 6,
+    width: 44,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inputWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D1D6',
-    borderRadius: 16.5,
-    marginHorizontal: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    minHeight: 33,
+    minHeight: 36,
   },
   textInput: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 18,
     color: '#000000',
-    letterSpacing: -0.4,
     lineHeight: 22,
     maxHeight: 100,
     paddingVertical: 0,
   },
-  stickerButton: {
-    marginLeft: 4,
+  sendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#50A8EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
   },
 });

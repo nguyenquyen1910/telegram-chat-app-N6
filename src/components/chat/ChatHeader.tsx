@@ -12,6 +12,8 @@ export default function ChatHeader({
   isOnline,
   onBackPress,
   onProfilePress,
+  onCallPress,
+  onMenuPress,
 }: ChatHeaderProps) {
   return (
     <View style={styles.container}>
@@ -20,27 +22,17 @@ export default function ChatHeader({
         <TouchableOpacity
           onPress={onBackPress}
           style={styles.backButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Ionicons name="chevron-back" size={28} color="#037EE5" />
-          <Text style={styles.backText}>Tin nhắn</Text>
+          <Ionicons name="arrow-back" size={24} color="#222222" />
         </TouchableOpacity>
 
-        {/* Center: Name + Status */}
+        {/* Avatar + Name + Status — chiếm hết giữa */}
         <TouchableOpacity
           onPress={onProfilePress}
-          style={styles.centerInfo}
+          style={styles.profileSection}
+          activeOpacity={0.7}
         >
-          <Text style={styles.userName} numberOfLines={1}>
-            {userName}
-          </Text>
-          <Text style={styles.statusText}>
-            {isOnline ? 'trực tuyến' : lastSeen}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Right: Avatar */}
-        <TouchableOpacity onPress={onProfilePress}>
           {userAvatar ? (
             <Image source={{ uri: userAvatar }} style={styles.avatar} />
           ) : (
@@ -50,7 +42,34 @@ export default function ChatHeader({
               </Text>
             </View>
           )}
+          <View style={styles.infoContainer}>
+            <Text style={styles.userName} numberOfLines={1}>
+              {userName}
+            </Text>
+            <Text style={[styles.statusText, isOnline && styles.statusOnline]}>
+              {isOnline ? 'trực tuyến' : lastSeen}
+            </Text>
+          </View>
         </TouchableOpacity>
+
+        {/* Right: Call + Menu — căn lề phải */}
+        <View style={styles.rightActions}>
+          <TouchableOpacity
+            onPress={onCallPress}
+            style={styles.actionButton}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="call-outline" size={22} color="#222222" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onMenuPress}
+            style={styles.actionButton}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="ellipsis-vertical" size={22} color="#222222" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -58,62 +77,77 @@ export default function ChatHeader({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F6F6F6',
+    backgroundColor: '#F6F8F3',
     paddingTop: STATUSBAR_HEIGHT + 4,
     paddingBottom: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(166,166,170,0.3)',
+    paddingHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 3,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   backButton: {
+    width: 40,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileSection: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: -4,
-  },
-  backText: {
-    color: '#037EE5',
-    fontSize: 17,
-    marginLeft: -2,
-  },
-  centerInfo: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    pointerEvents: 'box-none',
-  },
-  userName: {
-    color: '#000000',
-    fontSize: 17,
-    fontWeight: '500',
-    letterSpacing: -0.4,
-  },
-  statusText: {
-    color: '#787878',
-    fontSize: 13,
-    marginTop: 2,
+    marginLeft: 4,
   },
   avatar: {
-    width: 37,
-    height: 37,
-    borderRadius: 18.5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   avatarPlaceholder: {
-    width: 37,
-    height: 37,
-    borderRadius: 18.5,
-    backgroundColor: '#54A5E8',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#50A8EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarLetter: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
+  },
+  infoContainer: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  userName: {
+    color: '#222222',
+    fontSize: 17,
+    fontWeight: '600',
+    lineHeight: 22,
+  },
+  statusText: {
+    color: '#A8A8A8',
+    fontSize: 13,
+    lineHeight: 16,
+    marginTop: 1,
+  },
+  statusOnline: {
+    color: '#50A8EB',
+  },
+  rightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    width: 40,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

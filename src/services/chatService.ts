@@ -122,7 +122,7 @@ export async function sendMessage(
   const convRef = doc(firestore, 'conversations', conversationId);
   batch.update(convRef, {
     lastMessage: {
-      text: type === 'image' ? '📷 Ảnh' : text,
+      text: type === 'image' ? (text ? `📷 ${text}` : '📷 Ảnh') : text,
       senderId,
       timestamp: serverTimestamp(),
       type,
@@ -209,4 +209,26 @@ export async function getMediaMessages(conversationId: string): Promise<Message[
 
   const snapshot = await getDocs(q);
   return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Message));
+}
+
+// ==================== Conversations List ====================
+
+export function subscribeToConversations(
+  uid: string,
+  callback: (conversations: Conversation[]) => void
+) {
+  const firestore = getDb();
+  const convRef = collection(firestore, 'conversations');
+  const q = query(
+    convRef,
+    where('participants', 'array-contains', uid),
+    orderBy('updatedAt', 'desc')
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const conversations: Conversation[] = snapshot.docs.map(
+      (docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Conversation)
+    );
+    callback(conversations);
+  });
 }
