@@ -12,21 +12,23 @@ export default function ChatHeader({
   isOnline,
   onBackPress,
   onProfilePress,
+  onCallPress,
+  onMenuPress,
 }: ChatHeaderProps) {
   return (
     <View style={styles.container}>
       <View style={styles.row}>
-        {/* Back button */}
+        {/* Back button - 48x48 touch area */}
         <TouchableOpacity
           onPress={onBackPress}
-          style={styles.backButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={styles.navButton}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
           <Ionicons name="chevron-back" size={28} color="#037EE5" />
           <Text style={styles.backText}>Tin nhắn</Text>
         </TouchableOpacity>
 
-        {/* Center: Name + Status */}
+        {/* Avatar + Info */}
         <TouchableOpacity
           onPress={onProfilePress}
           style={styles.centerInfo}
@@ -50,7 +52,36 @@ export default function ChatHeader({
               </Text>
             </View>
           )}
+          <View style={styles.infoContainer}>
+            <Text style={styles.userName} numberOfLines={1}>
+              {userName}
+            </Text>
+            <Text style={[styles.statusText, isOnline && styles.statusOnline]}>
+              {isOnline ? 'trực tuyến' : lastSeen}
+            </Text>
+          </View>
         </TouchableOpacity>
+
+        {/* Right action buttons */}
+        <View style={styles.rightActions}>
+          {/* Call button */}
+          <TouchableOpacity
+            onPress={onCallPress}
+            style={styles.navButton}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="call-outline" size={22} color="#222222" />
+          </TouchableOpacity>
+
+          {/* More button */}
+          <TouchableOpacity
+            onPress={onMenuPress}
+            style={styles.moreButton}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="ellipsis-vertical" size={22} color="#222222" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -58,62 +89,77 @@ export default function ChatHeader({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F6F6F6',
+    backgroundColor: '#F6F8F3',
     paddingTop: STATUSBAR_HEIGHT + 4,
     paddingBottom: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(166,166,170,0.3)',
+    paddingHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 3,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  backButton: {
+  navButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileSection: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: -4,
-  },
-  backText: {
-    color: '#037EE5',
-    fontSize: 17,
-    marginLeft: -2,
-  },
-  centerInfo: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    pointerEvents: 'box-none',
-  },
-  userName: {
-    color: '#000000',
-    fontSize: 17,
-    fontWeight: '500',
-    letterSpacing: -0.4,
-  },
-  statusText: {
-    color: '#787878',
-    fontSize: 13,
-    marginTop: 2,
+    marginLeft: 4,
   },
   avatar: {
-    width: 37,
-    height: 37,
-    borderRadius: 18.5,
+    width: 43,
+    height: 43,
+    borderRadius: 36,
   },
   avatarPlaceholder: {
-    width: 37,
-    height: 37,
-    borderRadius: 18.5,
-    backgroundColor: '#54A5E8',
+    width: 43,
+    height: 43,
+    borderRadius: 36,
+    backgroundColor: '#50A8EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarLetter: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
+  },
+  infoContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  userName: {
+    color: '#222222',
+    fontSize: 18,
+    fontWeight: '500',
+    lineHeight: 24,
+  },
+  statusText: {
+    color: '#A8A8A8',
+    fontSize: 14,
+    lineHeight: 16,
+    marginTop: 1,
+  },
+  statusOnline: {
+    color: '#50A8EB',
+  },
+  rightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  moreButton: {
+    width: 44,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

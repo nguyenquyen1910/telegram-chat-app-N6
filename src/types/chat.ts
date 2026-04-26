@@ -31,7 +31,7 @@ export interface Conversation {
 }
 
 // ==================== Message ====================
-export type MessageType = 'text' | 'image' | 'file' | 'reply';
+export type MessageType = 'text' | 'image' | 'file' | 'reply' | 'voice';
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
 
 export interface ReplyTo {
@@ -51,6 +51,7 @@ export interface Message {
   fileSize?: number;
   fileThumbnail?: string;
   replyTo?: ReplyTo;
+  voiceDuration?: number;
   status: MessageStatus;
   createdAt: Timestamp;
 }
@@ -70,6 +71,8 @@ export interface ChatHeaderProps {
   isOnline: boolean;
   onBackPress: () => void;
   onProfilePress: () => void;
+  onCallPress?: () => void;
+  onMenuPress?: () => void;
 }
 
 export interface MessageBubbleProps {

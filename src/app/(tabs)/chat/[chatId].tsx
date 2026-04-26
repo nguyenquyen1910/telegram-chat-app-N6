@@ -13,9 +13,12 @@ import { Message } from '@/types/chat';
 import { MOCK_CURRENT_USER, formatLastSeen } from '@/constants/chat';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
+import { useChatWallpaper } from '@/hooks/useChatWallpaper';
 import ChatHeader from '@/components/chat/ChatHeader';
 import MessageBubble from '@/components/chat/MessageBubble';
 import MessageInput from '@/components/chat/MessageInput';
+import WallpaperPicker from '@/components/chat/WallpaperPicker';
+import ChatOptionsMenu from '@/components/chat/ChatOptionsMenu';
 
 export default function ChatDetailScreen() {
   const router = useRouter();
@@ -26,7 +29,11 @@ export default function ChatDetailScreen() {
     useMessages(chatId || null);
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  const { currentWallpaper, setWallpaper } = useChatWallpaper();
 
   const isOutgoing = useCallback(
     (msg: Message) => msg.senderId === MOCK_CURRENT_USER.uid,
@@ -103,10 +110,13 @@ export default function ChatDetailScreen() {
     [isOutgoing, otherUser, handleReply]
   );
 
+  // Tính background color từ wallpaper
+  const wallpaperBg = currentWallpaper.colors[0];
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#54A5E8" />
+        <ActivityIndicator size="large" color="#50A8EB" />
       </View>
     );
   }
@@ -131,10 +141,25 @@ export default function ChatDetailScreen() {
               params: { userId: otherUser?.uid || '' },
             })
           }
+          onCallPress={() => Alert.alert('Cuộc gọi', 'Tính năng đang phát triển')}
+          onMenuPress={() => setShowOptionsMenu(true)}
         />
 
-        {/* Messages */}
-        <View style={styles.messagesArea}>
+        {/* Messages area with wallpaper background */}
+        <View style={[styles.messagesArea, { backgroundColor: wallpaperBg }]}>
+          {/* Gradient overlay for two-tone wallpapers */}
+          {currentWallpaper.type === 'gradient' && currentWallpaper.colors.length >= 2 && (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: currentWallpaper.colors[1],
+                  opacity: 0.4,
+                },
+              ]}
+            />
+          )}
+
           <FlatList
             ref={flatListRef}
             data={messages}
@@ -171,6 +196,21 @@ export default function ChatDetailScreen() {
           onCancelReply={() => setReplyingTo(null)}
         />
       </KeyboardAvoidingView>
+
+      {/* Chat options menu */}
+      <ChatOptionsMenu
+        visible={showOptionsMenu}
+        onClose={() => setShowOptionsMenu(false)}
+        onChangeWallpaper={() => setShowWallpaperPicker(true)}
+      />
+
+      {/* Wallpaper picker */}
+      <WallpaperPicker
+        visible={showWallpaperPicker}
+        onClose={() => setShowWallpaperPicker(false)}
+        currentWallpaperId={currentWallpaper.id}
+        onSelect={setWallpaper}
+      />
     </View>
   );
 }
@@ -178,20 +218,19 @@ export default function ChatDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EFEFF4',
+    backgroundColor: '#F6F8F3',
   },
   flex: {
     flex: 1,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#EFEFF4',
+    backgroundColor: '#F6F8F3',
     alignItems: 'center',
     justifyContent: 'center',
   },
   messagesArea: {
     flex: 1,
-    backgroundColor: 'rgba(43, 120, 205, 0.08)',
   },
   messagesContent: {
     paddingVertical: 8,

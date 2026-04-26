@@ -5,6 +5,7 @@ import { MessageBubbleProps } from '@/types/chat';
 import { formatMessageTime } from '@/constants/chat';
 import ImageMessage from './ImageMessage';
 import ReplyPreview from './ReplyPreview';
+import VoiceMessage from './VoiceMessage';
 
 export default function MessageBubble({
   message,
@@ -43,9 +44,17 @@ export default function MessageBubble({
         {message.type === 'image' && message.imageUrl && (
           <ImageMessage
             imageUrl={message.imageUrl}
-            fileName={message.fileName || 'Image'}
+            fileName={message.fileName || 'Ảnh'}
             fileSize={message.fileSize || 0}
             onPress={() => onImagePress?.(message.imageUrl!)}
+          />
+        )}
+
+        {/* Voice message */}
+        {message.type === 'voice' && (
+          <VoiceMessage
+            duration={message.voiceDuration || 0}
+            isOutgoing={isOutgoing}
           />
         )}
 
@@ -69,13 +78,16 @@ export default function MessageBubble({
           </Text>
 
           {isOutgoing && message.status === 'read' && (
-            <Ionicons name="checkmark-done" size={14} color="#21C004" style={{ marginLeft: 3 }} />
+            <Ionicons name="checkmark-done" size={14} color="#4ECC5E" style={{ marginLeft: 3 }} />
           )}
           {isOutgoing && message.status === 'sent' && (
-            <Ionicons name="checkmark" size={14} color="#21C004" style={{ marginLeft: 3 }} />
+            <Ionicons name="checkmark-done" size={14} color="#A8A8A8" style={{ marginLeft: 3 }} />
+          )}
+          {isOutgoing && message.status === 'delivered' && (
+            <Ionicons name="checkmark-done" size={14} color="#A8A8A8" style={{ marginLeft: 3 }} />
           )}
           {isOutgoing && message.status === 'sending' && (
-            <Ionicons name="time-outline" size={12} color="#8E8E93" style={{ marginLeft: 3 }} />
+            <Ionicons name="time-outline" size={12} color="#A8A8A8" style={{ marginLeft: 3 }} />
           )}
         </View>
       </TouchableOpacity>
@@ -100,11 +112,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 6,
     paddingBottom: 6,
-    borderWidth: 0.5,
-    borderColor: '#B5CADD',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
   },
   outgoingBubble: {
-    backgroundColor: '#E1FEC6',
+    backgroundColor: '#EEFFDE',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     borderBottomLeftRadius: 16,
@@ -124,9 +139,9 @@ const styles = StyleSheet.create({
   },
   messageText: {
     color: '#000000',
-    fontSize: 17,
-    lineHeight: 22,
-    letterSpacing: -0.4,
+    fontSize: 16,
+    lineHeight: 21,
+    letterSpacing: -0.3,
   },
   timeSpacer: {
     color: 'transparent',
@@ -141,11 +156,10 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 11,
-    fontStyle: 'italic',
     lineHeight: 13,
   },
   timeOutgoing: {
-    color: '#2DA430',
+    color: '#6DB870',
   },
   timeIncoming: {
     color: '#8E8E93',
