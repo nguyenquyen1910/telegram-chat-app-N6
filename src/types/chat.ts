@@ -85,7 +85,10 @@ export interface MessageBubbleProps {
 
 export interface MessageInputProps {
   onSendText: (text: string) => void;
-  onSendImage: () => void;
+  onPickImage: () => void;
+  onSendImage: (uri: string, fileName: string, caption: string) => void;
+  pendingImage: { uri: string; fileName: string } | null;
+  onCancelImage: () => void;
   replyingTo: Message | null;
   replyingSenderName?: string;
   onCancelReply: () => void;

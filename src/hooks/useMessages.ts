@@ -5,10 +5,9 @@ import {
   getMessages,
   sendMessage,
   subscribeToNewMessages,
-  markMessagesAsRead,
 } from '@/services/chatService';
 import { uploadImage } from '@/services/mediaService';
-import { MESSAGES_PER_PAGE, MOCK_MESSAGES, MOCK_CURRENT_USER } from '@/constants/chat';
+import { MESSAGES_PER_PAGE } from '@/constants/chat';
 
 interface UseMessagesReturn {
   messages: Message[];
@@ -18,16 +17,16 @@ interface UseMessagesReturn {
   hasMore: boolean;
   loadMore: () => Promise<void>;
   sendTextMessage: (text: string, replyTo?: ReplyTo) => Promise<void>;
-  sendImageMessage: (localUri: string, fileName: string) => Promise<void>;
+  sendImageMessage: (localUri: string, fileName: string, caption?: string) => Promise<void>;
 }
 
 /**
  * Hook quản lý messages real-time cho 1 conversation
- * Hỗ trợ: pagination, real-time updates, gửi text/image, optimistic update
+ * Sử dụng currentUid thật từ AuthContext
  */
 export function useMessages(
   conversationId: string | null,
-  useMock: boolean = false
+  currentUid: string | null
 ): UseMessagesReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,15 +38,7 @@ export function useMessages(
 
   // Load initial messages
   useEffect(() => {
-    if (!conversationId) return;
-
-    if (useMock) {
-      // Dùng mock data
-      setMessages(MOCK_MESSAGES);
-      setLoading(false);
-      setHasMore(false);
-      return;
-    }
+    if (!conversationId || !currentUid) return;
 
     async function loadInitialMessages() {
       try {
@@ -89,11 +80,11 @@ export function useMessages(
     return () => {
       unsubscribeRef.current?.();
     };
-  }, [conversationId, useMock]);
+  }, [conversationId, currentUid]);
 
   // Load more (pagination - scroll lên)
   const loadMore = useCallback(async () => {
-    if (!conversationId || !hasMore || loading || useMock) return;
+    if (!conversationId || !hasMore || loading) return;
 
     try {
       const result = await getMessages(
@@ -108,30 +99,14 @@ export function useMessages(
     } catch (err) {
       console.error('Error loading more messages:', err);
     }
-  }, [conversationId, hasMore, loading, useMock]);
+  }, [conversationId, hasMore, loading]);
 
   // Gửi tin nhắn text
   const sendTextMessage = useCallback(
     async (text: string, replyTo?: ReplyTo) => {
-      if (!conversationId || !text.trim()) return;
+      if (!conversationId || !currentUid || !text.trim()) return;
 
       const type: MessageType = replyTo ? 'reply' : 'text';
-
-      if (useMock) {
-        // Optimistic update cho mock
-        const newMsg: Message = {
-          id: `msg_${Date.now()}`,
-          conversationId,
-          senderId: MOCK_CURRENT_USER.uid,
-          text: text.trim(),
-          type,
-          replyTo,
-          status: 'sent',
-          createdAt: Timestamp.now(),
-        };
-        setMessages((prev) => [...prev, newMsg]);
-        return;
-      }
 
       try {
         setSending(true);
@@ -141,7 +116,7 @@ export function useMessages(
         const optimisticMsg: Message = {
           id: tempId,
           conversationId,
-          senderId: MOCK_CURRENT_USER.uid,
+          senderId: currentUid,
           text: text.trim(),
           type,
           replyTo,
@@ -150,7 +125,7 @@ export function useMessages(
         };
         setMessages((prev) => [...prev, optimisticMsg]);
 
-        await sendMessage(conversationId, MOCK_CURRENT_USER.uid, text.trim(), type, {
+        await sendMessage(conversationId, currentUid, text.trim(), type, {
           replyTo,
         });
 
@@ -163,30 +138,13 @@ export function useMessages(
         setSending(false);
       }
     },
-    [conversationId, useMock]
+    [conversationId, currentUid]
   );
 
-  // Gửi tin nhắn ảnh
+  // Gửi tin nhắn ảnh (với caption text tuỳ chọn)
   const sendImageMessage = useCallback(
-    async (localUri: string, fileName: string) => {
-      if (!conversationId) return;
-
-      if (useMock) {
-        const newMsg: Message = {
-          id: `msg_${Date.now()}`,
-          conversationId,
-          senderId: MOCK_CURRENT_USER.uid,
-          text: '',
-          type: 'image',
-          imageUrl: localUri,
-          fileName,
-          fileSize: 2500000,
-          status: 'sent',
-          createdAt: Timestamp.now(),
-        };
-        setMessages((prev) => [...prev, newMsg]);
-        return;
-      }
+    async (localUri: string, fileName: string, caption?: string) => {
+      if (!conversationId || !currentUid) return;
 
       try {
         setSending(true);
@@ -196,8 +154,8 @@ export function useMessages(
         const optimisticMsg: Message = {
           id: tempId,
           conversationId,
-          senderId: MOCK_CURRENT_USER.uid,
-          text: '',
+          senderId: currentUid,
+          text: caption || '',
           type: 'image',
           imageUrl: localUri,
           fileName,
@@ -210,8 +168,8 @@ export function useMessages(
         // Upload ảnh lên Cloudinary
         const result = await uploadImage(localUri);
 
-        // Gửi message với URL Cloudinary
-        await sendMessage(conversationId, MOCK_CURRENT_USER.uid, '', 'image', {
+        // Gửi message với URL Cloudinary + caption
+        await sendMessage(conversationId, currentUid, caption || '', 'image', {
           imageUrl: result.url,
           fileName,
           fileSize: result.size,
@@ -226,7 +184,7 @@ export function useMessages(
         setSending(false);
       }
     },
-    [conversationId, useMock]
+    [conversationId, currentUid]
   );
 
   return {

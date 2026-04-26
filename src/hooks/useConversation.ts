@@ -2,22 +2,21 @@ import { useState, useEffect } from 'react';
 import { Conversation, User } from '@/types/chat';
 import { getConversation, subscribeToConversation } from '@/services/chatService';
 import { getUserById, subscribeToUserStatus } from '@/services/userService';
-import { MOCK_CONVERSATION, MOCK_OTHER_USER, MOCK_CURRENT_USER } from '@/constants/chat';
 
 interface UseConversationReturn {
   conversation: Conversation | null;
   otherUser: User | null;
-  currentUser: User;
   loading: boolean;
   error: string | null;
 }
 
 /**
  * Hook lấy thông tin conversation và thông tin user đối phương
+ * Sử dụng currentUid thật từ AuthContext
  */
 export function useConversation(
   conversationId: string | null,
-  useMock: boolean = false
+  currentUid: string | null
 ): UseConversationReturn {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [otherUser, setOtherUser] = useState<User | null>(null);
@@ -25,14 +24,7 @@ export function useConversation(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!conversationId) return;
-
-    if (useMock) {
-      setConversation(MOCK_CONVERSATION);
-      setOtherUser(MOCK_OTHER_USER);
-      setLoading(false);
-      return;
-    }
+    if (!conversationId || !currentUid) return;
 
     let unsubConv: (() => void) | null = null;
     let unsubUser: (() => void) | null = null;
@@ -50,7 +42,7 @@ export function useConversation(
         setConversation(conv);
 
         // Tìm other participant
-        const otherUid = conv.participants.find((uid) => uid !== MOCK_CURRENT_USER.uid);
+        const otherUid = conv.participants.find((uid) => uid !== currentUid);
         if (otherUid) {
           const user = await getUserById(otherUid);
           setOtherUser(user);
@@ -79,12 +71,11 @@ export function useConversation(
       unsubConv?.();
       unsubUser?.();
     };
-  }, [conversationId, useMock]);
+  }, [conversationId, currentUid]);
 
   return {
     conversation,
     otherUser,
-    currentUser: MOCK_CURRENT_USER,
     loading,
     error,
   };

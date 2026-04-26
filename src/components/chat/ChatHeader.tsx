@@ -18,31 +18,21 @@ export default function ChatHeader({
   return (
     <View style={styles.container}>
       <View style={styles.row}>
-        {/* Back button - 48x48 touch area */}
+        {/* Back button */}
         <TouchableOpacity
           onPress={onBackPress}
-          style={styles.navButton}
+          style={styles.backButton}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Ionicons name="chevron-back" size={28} color="#037EE5" />
-          <Text style={styles.backText}>Tin nhắn</Text>
+          <Ionicons name="arrow-back" size={24} color="#222222" />
         </TouchableOpacity>
 
-        {/* Avatar + Info */}
+        {/* Avatar + Name + Status — chiếm hết giữa */}
         <TouchableOpacity
           onPress={onProfilePress}
-          style={styles.centerInfo}
+          style={styles.profileSection}
+          activeOpacity={0.7}
         >
-          <Text style={styles.userName} numberOfLines={1}>
-            {userName}
-          </Text>
-          <Text style={styles.statusText}>
-            {isOnline ? 'trực tuyến' : lastSeen}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Right: Avatar */}
-        <TouchableOpacity onPress={onProfilePress}>
           {userAvatar ? (
             <Image source={{ uri: userAvatar }} style={styles.avatar} />
           ) : (
@@ -62,21 +52,19 @@ export default function ChatHeader({
           </View>
         </TouchableOpacity>
 
-        {/* Right action buttons */}
+        {/* Right: Call + Menu — căn lề phải */}
         <View style={styles.rightActions}>
-          {/* Call button */}
           <TouchableOpacity
             onPress={onCallPress}
-            style={styles.navButton}
+            style={styles.actionButton}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
             <Ionicons name="call-outline" size={22} color="#222222" />
           </TouchableOpacity>
 
-          {/* More button */}
           <TouchableOpacity
             onPress={onMenuPress}
-            style={styles.moreButton}
+            style={styles.actionButton}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
             <Ionicons name="ellipsis-vertical" size={22} color="#222222" />
@@ -103,8 +91,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  navButton: {
-    width: 48,
+  backButton: {
+    width: 40,
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
@@ -116,36 +104,36 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   avatar: {
-    width: 43,
-    height: 43,
-    borderRadius: 36,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   avatarPlaceholder: {
-    width: 43,
-    height: 43,
-    borderRadius: 36,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#50A8EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarLetter: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
   },
   infoContainer: {
-    marginLeft: 12,
+    marginLeft: 10,
     flex: 1,
   },
   userName: {
     color: '#222222',
-    fontSize: 18,
-    fontWeight: '500',
-    lineHeight: 24,
+    fontSize: 17,
+    fontWeight: '600',
+    lineHeight: 22,
   },
   statusText: {
     color: '#A8A8A8',
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 16,
     marginTop: 1,
   },
@@ -156,8 +144,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  moreButton: {
-    width: 44,
+  actionButton: {
+    width: 40,
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,5 +1,5 @@
-import { initializeApp, FirebaseApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence, Auth } from 'firebase/auth';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeAuth, getAuth, getReactNativePersistence, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,12 +23,24 @@ let storage: FirebaseStorage | null = null;
 
 if (hasValidConfig) {
   try {
-    app = initializeApp(firebaseConfig);
-    auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-    });
+    // Kiểm tra xem app đã khởi tạo trước đó chưa (hot reload / re-render)
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+    // initializeAuth chỉ gọi được 1 lần, lần sau phải dùng getAuth
+    try {
+      auth = initializeAuth(app, {
+        persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+      });
+    } catch (authError) {
+      // Auth đã khởi tạo trước đó → lấy instance có sẵn
+      auth = getAuth(app);
+    }
+
+    // getFirestore và getStorage là idempotent (gọi bao nhiêu lần cũng OK)
     db = getFirestore(app);
     storage = getStorage(app);
+
+    console.log('[Firebase] Initialized successfully. Project:', firebaseConfig.projectId);
   } catch (error) {
     console.warn('Firebase initialization failed:', error);
   }

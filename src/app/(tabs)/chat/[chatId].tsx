@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Message } from '@/types/chat';
-import { MOCK_CURRENT_USER, formatLastSeen } from '@/constants/chat';
+import { formatLastSeen } from '@/constants/chat';
+import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
 import { useChatWallpaper } from '@/hooks/useChatWallpaper';
@@ -23,12 +24,15 @@ import ChatOptionsMenu from '@/components/chat/ChatOptionsMenu';
 export default function ChatDetailScreen() {
   const router = useRouter();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
+  const { user } = useAuth();
+  const currentUid = (user as any)?.uid || null;
 
-  const { conversation, otherUser, currentUser } = useConversation(chatId || null);
+  const { conversation, otherUser } = useConversation(chatId || null, currentUid);
   const { messages, loading, sending, sendTextMessage, sendImageMessage, loadMore, hasMore } =
-    useMessages(chatId || null);
+    useMessages(chatId || null, currentUid);
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [pendingImage, setPendingImage] = useState<{ uri: string; fileName: string } | null>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const flatListRef = useRef<FlatList>(null);
@@ -36,8 +40,8 @@ export default function ChatDetailScreen() {
   const { currentWallpaper, setWallpaper } = useChatWallpaper();
 
   const isOutgoing = useCallback(
-    (msg: Message) => msg.senderId === MOCK_CURRENT_USER.uid,
-    []
+    (msg: Message) => msg.senderId === currentUid,
+    [currentUid]
   );
 
   const handleReply = useCallback((msg: Message) => {
@@ -51,7 +55,7 @@ export default function ChatDetailScreen() {
             messageId: replyingTo.id,
             text: replyingTo.type === 'image' ? '📷 Ảnh' : replyingTo.text,
             senderName: isOutgoing(replyingTo)
-              ? currentUser.displayName
+              ? 'Bạn'
               : otherUser?.displayName || 'User',
           }
         : undefined;
@@ -63,10 +67,11 @@ export default function ChatDetailScreen() {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     },
-    [replyingTo, sendTextMessage, otherUser, currentUser, isOutgoing]
+    [replyingTo, sendTextMessage, otherUser, isOutgoing]
   );
 
-  const handleSendImage = useCallback(async () => {
+  // Chọn ảnh từ thư viện — KHÔNG gửi ngay, chỉ set pending
+  const handlePickImage = useCallback(async () => {
     try {
       const ImagePicker = await import('expo-image-picker');
 
@@ -85,17 +90,27 @@ export default function ChatDetailScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const fileName = asset.fileName || `IMG_${Date.now()}.jpg`;
-        await sendImageMessage(asset.uri, fileName);
-
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        // Set pending image → MessageInput sẽ hiện preview
+        setPendingImage({ uri: asset.uri, fileName });
       }
     } catch (error) {
       console.error('Image picker error:', error);
       Alert.alert('Lỗi', 'Không thể chọn ảnh.');
     }
-  }, [sendImageMessage]);
+  }, []);
+
+  // Gửi ảnh kèm caption từ MessageInput
+  const handleSendImage = useCallback(
+    async (uri: string, fileName: string, caption: string) => {
+      setPendingImage(null);
+      await sendImageMessage(uri, fileName, caption || undefined);
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    },
+    [sendImageMessage]
+  );
 
   const renderMessage = useCallback(
     ({ item }: { item: Message }) => (
@@ -184,12 +199,15 @@ export default function ChatDetailScreen() {
         {/* Input bar */}
         <MessageInput
           onSendText={handleSendText}
+          onPickImage={handlePickImage}
           onSendImage={handleSendImage}
+          pendingImage={pendingImage}
+          onCancelImage={() => setPendingImage(null)}
           replyingTo={replyingTo}
           replyingSenderName={
             replyingTo
               ? isOutgoing(replyingTo)
-                ? currentUser.displayName
+                ? 'Bạn'
                 : otherUser?.displayName
               : undefined
           }
