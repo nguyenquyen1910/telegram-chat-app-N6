@@ -82,7 +82,13 @@ export default function VerifySmsScreen() {
             <View style={styles.content}>
                 <TouchableOpacity
                     style={styles.backButton}
-                    onPress={() => router.back()}
+                    onPress={() => {
+                        if (router.canGoBack()) {
+                            router.back();
+                        } else {
+                            router.replace('/(auth)/welcome');
+                        }
+                    }}
                 >
                     <Ionicons name="arrow-back" size={24} color="#007AFF" />
                 </TouchableOpacity>
@@ -106,7 +112,11 @@ export default function VerifySmsScreen() {
                     </Text>
                 </View>
 
-                <View style={styles.codeContainer}>
+                <TouchableOpacity 
+                    style={styles.codeContainer} 
+                    onPress={() => inputRef.current?.focus()} 
+                    activeOpacity={1}
+                >
                     {Array.from({ length: CODE_LENGTH }).map((_, index) => (
                         <View
                             key={index}
@@ -121,7 +131,7 @@ export default function VerifySmsScreen() {
                             </Text>
                         </View>
                     ))}
-                </View>
+                </TouchableOpacity>
 
                 <TextInput
                     ref={inputRef}

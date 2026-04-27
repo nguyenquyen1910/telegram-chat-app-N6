@@ -87,7 +87,13 @@ export default function VerifyCodeScreen() {
                 {/* Back button */}
                 <TouchableOpacity
                     style={styles.backButton}
-                    onPress={() => router.back()}
+                    onPress={() => {
+                        if (router.canGoBack()) {
+                            router.back();
+                        } else {
+                            router.replace('/(auth)/welcome');
+                        }
+                    }}
                 >
                     <Ionicons name="arrow-back" size={24} color="#007AFF" />
                 </TouchableOpacity>
@@ -114,7 +120,11 @@ export default function VerifyCodeScreen() {
                 </View>
 
                 {/* Code input boxes */}
-                <View style={styles.codeContainer}>
+                <TouchableOpacity 
+                    style={styles.codeContainer} 
+                    onPress={() => inputRef.current?.focus()} 
+                    activeOpacity={1}
+                >
                     {Array.from({ length: CODE_LENGTH }).map((_, index) => (
                         <View
                             key={index}
@@ -129,7 +139,7 @@ export default function VerifyCodeScreen() {
                             </Text>
                         </View>
                     ))}
-                </View>
+                </TouchableOpacity>
 
                 {/* Hidden input */}
                 <TextInput
