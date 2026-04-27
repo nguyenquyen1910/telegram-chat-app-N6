@@ -1,6 +1,24 @@
-import { Stack } from 'expo-router';
+import { Stack, Redirect } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import { ActivityIndicator, View } from 'react-native';
 
 export default function AuthLayout() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // If still loading, show nothing (splash screen handles this)
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
+  // If already authenticated, redirect to chat immediately
+  if (isAuthenticated) {
+    return <Redirect href="/(tabs)/chat" />;
+  }
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="welcome" />
