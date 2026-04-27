@@ -10,8 +10,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { checkPhoneExists, getEmailByPhone, sendEmailOTP } from '@/services/auth';
 
 // List of popular countries
 const COUNTRIES = [
@@ -29,6 +31,7 @@ export default function PhoneScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
 
   const fullPhoneNumber = `${selectedCountry.code}${phoneNumber}`;
 
@@ -40,13 +43,44 @@ export default function PhoneScreen() {
     setShowConfirm(true);
   };
 
-  const handleConfirmAndGoToEmail = () => {
+  const handleConfirmPhone = async () => {
     setShowConfirm(false);
-    // Navigate to email screen, passing the phone number
-    router.push({
-      pathname: '/(auth)/enter-email',
-      params: { phoneNumber: fullPhoneNumber },
-    });
+    setIsChecking(true);
+
+    try {
+      const exists = await checkPhoneExists(fullPhoneNumber);
+
+      if (exists) {
+        // ===== LOGIN FLOW =====
+        // Phone exists → get email → send OTP → go to verify
+        const email = await getEmailByPhone(fullPhoneNumber);
+        if (!email) {
+          Alert.alert('Lỗi', 'Không tìm thấy email liên kết với số điện thoại này.');
+          return;
+        }
+
+        // Send OTP to the registered email
+        await sendEmailOTP(email, fullPhoneNumber);
+
+        // Go to verify-code screen (login mode)
+        router.push({
+          pathname: '/(auth)/verify-code',
+          params: { phoneNumber: fullPhoneNumber, email, mode: 'login' },
+        });
+      } else {
+        // ===== REGISTER FLOW =====
+        // Phone doesn't exist → go to enter email
+        router.push({
+          pathname: '/(auth)/enter-email',
+          params: { phoneNumber: fullPhoneNumber },
+        });
+      }
+    } catch (error: any) {
+      console.error('Phone check error:', error);
+      Alert.alert('Lỗi', 'Không thể kiểm tra số điện thoại. Vui lòng thử lại.');
+    } finally {
+      setIsChecking(false);
+    }
   };
 
   return (
@@ -101,7 +135,7 @@ export default function PhoneScreen() {
             phoneNumber.length < 9 && styles.continueButtonDisabled,
           ]}
           onPress={handleContinue}
-          disabled={phoneNumber.length < 9}
+          disabled={phoneNumber.length < 9 || isChecking}
         >
           <Text
             style={[
@@ -113,6 +147,14 @@ export default function PhoneScreen() {
           </Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
+
+      {/* Loading overlay */}
+      {isChecking && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.loadingText}>Checking...</Text>
+        </View>
+      )}
 
       {/* Modal confirm phone number */}
       <Modal visible={showConfirm} transparent animationType="fade">
@@ -129,7 +171,7 @@ export default function PhoneScreen() {
 
             <TouchableOpacity
               style={styles.modalContinue}
-              onPress={handleConfirmAndGoToEmail}
+              onPress={handleConfirmPhone}
             >
               <Text style={styles.modalContinueText}>Continue</Text>
             </TouchableOpacity>
@@ -260,7 +302,17 @@ const styles = StyleSheet.create({
   continueTextDisabled: {
     color: '#C7C7CC',
   },
-  // Modal confirm
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -300,7 +352,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
   },
-  // Country picker
   countryPickerContent: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,

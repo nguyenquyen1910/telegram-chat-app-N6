@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { sendEmailOTP } from '@/services/auth';
 
 export default function EnterEmailScreen() {
@@ -33,11 +34,11 @@ export default function EnterEmailScreen() {
       await sendEmailOTP(email, phoneNumber);
       router.push({
         pathname: '/(auth)/verify-code',
-        params: { phoneNumber, email },
+        params: { phoneNumber, email, mode: 'register' },
       });
     } catch (error: any) {
       console.error('Send email OTP error:', error);
-      Alert.alert('Lỗi', error.message || 'Không thể gửi mã xác thực. Vui lòng thử lại.');
+      Alert.alert('Lỗi', error.message || 'Không thể gửi mã xác thực.');
     } finally {
       setIsSending(false);
     }
@@ -54,12 +55,14 @@ export default function EnterEmailScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Text style={styles.backText}>← Back</Text>
+          <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
 
         {/* Header icon */}
         <View style={styles.iconContainer}>
-          <Text style={styles.emailIcon}>📧</Text>
+          <View style={styles.iconCircle}>
+            <Ionicons name="mail-outline" size={40} color="#007AFF" />
+          </View>
         </View>
 
         <Text style={styles.title}>Your Email</Text>
@@ -69,7 +72,7 @@ export default function EnterEmailScreen() {
 
         {/* Phone number display */}
         <View style={styles.phoneInfoRow}>
-          <Text style={styles.phoneInfoLabel}>Phone:</Text>
+          <Ionicons name="call-outline" size={16} color="#8E8E93" />
           <Text style={styles.phoneInfoValue}>{phoneNumber}</Text>
         </View>
 
@@ -77,7 +80,7 @@ export default function EnterEmailScreen() {
 
         {/* Email input */}
         <View style={styles.emailRow}>
-          <Text style={styles.emailLabel}>✉️</Text>
+          <Ionicons name="mail" size={20} color="#007AFF" />
           <TextInput
             style={styles.emailInput}
             placeholder="Enter your email"
@@ -94,9 +97,12 @@ export default function EnterEmailScreen() {
         <View style={styles.divider} />
 
         {/* Info text */}
-        <Text style={styles.infoText}>
-          📨 A 6-digit verification code will be sent to your email address.
-        </Text>
+        <View style={styles.infoRow}>
+          <Ionicons name="information-circle-outline" size={16} color="#8E8E93" />
+          <Text style={styles.infoText}>
+            A 6-digit verification code will be sent to your email address.
+          </Text>
+        </View>
 
         {/* Continue button */}
         <TouchableOpacity
@@ -110,14 +116,17 @@ export default function EnterEmailScreen() {
           {isSending ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text
-              style={[
-                styles.continueText,
-                !isValidEmail && styles.continueTextDisabled,
-              ]}
-            >
-              Send Code
-            </Text>
+            <View style={styles.buttonContent}>
+              <Ionicons name="send" size={18} color="#FFFFFF" />
+              <Text
+                style={[
+                  styles.continueText,
+                  !isValidEmail && styles.continueTextDisabled,
+                ]}
+              >
+                Send Code
+              </Text>
+            </View>
           )}
         </TouchableOpacity>
       </KeyboardAvoidingView>
@@ -134,117 +143,39 @@ export default function EnterEmailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  inner: { flex: 1, paddingHorizontal: 24, paddingTop: 16 },
+  backButton: { alignSelf: 'flex-start', marginBottom: 16, padding: 8 },
+  iconContainer: { alignItems: 'center', marginBottom: 16 },
+  iconCircle: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: '#F0F7FF', justifyContent: 'center', alignItems: 'center',
   },
-  inner: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 20,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-    paddingVertical: 8,
-  },
-  backText: {
-    fontSize: 17,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emailIcon: {
-    fontSize: 64,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#8E8E93',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
+  title: { fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 15, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   phoneInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    marginBottom: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 10, backgroundColor: '#F2F2F7',
+    borderRadius: 10, paddingHorizontal: 16, marginBottom: 20,
   },
-  phoneInfoLabel: {
-    fontSize: 15,
-    color: '#8E8E93',
-    marginRight: 8,
-  },
-  phoneInfoValue: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#000000',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#C6C6C8',
-  },
-  emailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  emailLabel: {
-    fontSize: 22,
-    marginRight: 12,
-  },
-  emailInput: {
-    flex: 1,
-    fontSize: 17,
-    color: '#000000',
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#8E8E93',
-    textAlign: 'center',
-    marginTop: 16,
-    lineHeight: 18,
-  },
+  phoneInfoValue: { fontSize: 17, fontWeight: '600', color: '#000000' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#C6C6C8' },
+  emailRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 },
+  emailInput: { flex: 1, fontSize: 17, color: '#000000' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 6 },
+  infoText: { fontSize: 13, color: '#8E8E93', lineHeight: 18, flex: 1 },
   continueButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 32,
+    backgroundColor: '#007AFF', borderRadius: 12,
+    paddingVertical: 16, alignItems: 'center', marginTop: 32,
   },
-  continueButtonDisabled: {
-    backgroundColor: '#B0D4FF',
-  },
-  continueText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  continueTextDisabled: {
-    color: '#FFFFFF',
-  },
-  // Loading overlay
+  continueButtonDisabled: { backgroundColor: '#B0D4FF' },
+  buttonContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  continueText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  continueTextDisabled: { color: '#FFFFFF' },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
   },
-  loadingText: {
-    marginTop: 12,
-    color: '#FFFFFF',
-    fontSize: 16,
-  },
+  loadingText: { marginTop: 12, color: '#FFFFFF', fontSize: 16 },
 });

@@ -7,6 +7,7 @@ export default function AuthLayout() {
       <Stack.Screen name="phone" />
       <Stack.Screen name="enter-email" />
       <Stack.Screen name="verify-code" />
+      <Stack.Screen name="verify-sms" />
     </Stack>
   );
 }
