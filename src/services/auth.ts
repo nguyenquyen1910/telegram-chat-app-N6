@@ -5,16 +5,17 @@ import {
   signOut as firebaseSignOut,
   signInAnonymously,
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDocs, query, where, collection, serverTimestamp } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ======= EMAIL OTP CONFIG =======
-// Dùng EmailJS để gửi OTP về email (miễn phí, không cần backend)
-// Đăng ký tại https://www.emailjs.com/ để lấy các key bên dưới
 const EMAILJS_SERVICE_ID = 'service_qj13lp9';
 const EMAILJS_TEMPLATE_ID = 'template_r740ehq';
 const EMAILJS_PUBLIC_KEY = 'pwrgr3MCN3kKAiaGw';
 // ==================================
+
+// Fixed SMS OTP for emulator testing
+const FIXED_SMS_OTP = '123456';
 
 // Storage keys
 const AUTH_STORAGE_KEY = '@telegram_auth_user';
@@ -31,6 +32,43 @@ const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+// ============ PHONE CHECK ============
+
+// Check if phone number already exists in Firestore
+export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> => {
+  if (!db) {
+    console.warn('[DB] Firestore not initialized');
+    return false;
+  }
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  } catch (error) {
+    console.error('[DB] Error checking phone:', error);
+    return false;
+  }
+};
+
+// Get user email by phone number from Firestore
+export const getEmailByPhone = async (phoneNumber: string): Promise<string | null> => {
+  if (!db) return null;
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    const userData = snapshot.docs[0].data();
+    return userData.email || null;
+  } catch (error) {
+    console.error('[DB] Error getting email:', error);
+    return null;
+  }
+};
+
+// ============ EMAIL OTP ============
+
 // Send OTP to email via EmailJS REST API
 export const sendEmailOTP = async (
   email: string,
@@ -44,7 +82,6 @@ export const sendEmailOTP = async (
 
   console.log(`[OTP] Code "${otp}" generated for email: ${email}`);
 
-  // Gửi email thật qua EmailJS API
   try {
     const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
@@ -67,7 +104,6 @@ export const sendEmailOTP = async (
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[EMAIL] Error ${response.status}: ${errorText}`);
-      // Email failed but OTP is still valid - return it so UI can show it
       return { otp, emailSent: false };
     }
 
@@ -75,77 +111,27 @@ export const sendEmailOTP = async (
     return { otp, emailSent: true };
   } catch (error: any) {
     console.error('[EMAIL] Failed to send OTP:', error);
-    // Email failed but OTP is still valid - return it so UI can show it
     return { otp, emailSent: false };
   }
 };
 
-// Verify OTP code
-export const verifyEmailOTP = async (code: string): Promise<any> => {
+// Verify Email OTP code (does NOT save user - used for both register & login)
+export const verifyEmailOTP = async (code: string): Promise<boolean> => {
   if (!currentOTP || !otpExpiry) {
     throw new Error('No OTP sent. Please request a new code.');
   }
-
   if (Date.now() > otpExpiry) {
     currentOTP = null;
     otpExpiry = null;
     throw new Error('OTP expired. Please request a new code.');
   }
-
   if (code !== currentOTP) {
     throw new Error('Wrong OTP code');
   }
-
-  // OTP correct!
-  const uid = `user-${Date.now()}`;
-  const userData = {
-    uid,
-    phoneNumber: currentPhone,
-    email: currentEmail,
-    createdAt: new Date().toISOString(),
-  };
-
-  // Save to AsyncStorage for persistent login
-  await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
-
-  // Clear OTP state
+  // OTP correct - clear it
   currentOTP = null;
   otpExpiry = null;
-
-  // Try Firebase anonymous sign-in for Firebase features
-  let finalUid = uid;
-  if (auth) {
-    try {
-      const result = await signInAnonymously(auth);
-      finalUid = result.user.uid;
-      // Update userData with Firebase UID
-      userData.uid = finalUid;
-      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
-    } catch (e) {
-      console.warn('[AUTH] Firebase anonymous sign-in failed, using local auth');
-    }
-  }
-
-  // Save user to Firestore database
-  if (db) {
-    try {
-      await setDoc(doc(db, 'users', finalUid), {
-        uid: finalUid,
-        phoneNumber: currentPhone,
-        email: currentEmail,
-        displayName: '',
-        photoURL: '',
-        isOnline: true,
-        lastSeen: serverTimestamp(),
-        createdAt: serverTimestamp(),
-      }, { merge: true });
-      console.log(`[DB] User saved to Firestore: ${finalUid}`);
-    } catch (e) {
-      console.warn('[DB] Failed to save user to Firestore:', e);
-    }
-  }
-
-  return userData;
+  return true;
 };
 
 // Resend OTP to email
@@ -155,6 +141,109 @@ export const resendEmailOTP = async (): Promise<void> => {
   }
   await sendEmailOTP(currentEmail, currentPhone);
 };
+
+// ============ SMS OTP (Fixed for emulator) ============
+
+// Verify SMS OTP - fixed code "123456" for emulator
+export const verifySmsOTP = async (code: string): Promise<boolean> => {
+  if (code !== FIXED_SMS_OTP) {
+    throw new Error('Wrong SMS code');
+  }
+  return true;
+};
+
+// ============ REGISTER & LOGIN ============
+
+// Register: save new user to Firestore after all verifications
+export const registerUser = async (
+  phoneNumber: string,
+  email: string
+): Promise<any> => {
+  const uid = `user-${Date.now()}`;
+  const userData = {
+    uid,
+    phoneNumber,
+    email,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Try Firebase anonymous sign-in
+  let finalUid = uid;
+  if (auth) {
+    try {
+      const result = await signInAnonymously(auth);
+      finalUid = result.user.uid;
+      userData.uid = finalUid;
+    } catch (e) {
+      console.warn('[AUTH] Firebase anonymous sign-in failed, using local auth');
+    }
+  }
+
+  // Save to Firestore
+  if (db) {
+    try {
+      await setDoc(doc(db, 'users', finalUid), {
+        uid: finalUid,
+        phoneNumber,
+        email,
+        displayName: '',
+        photoURL: '',
+        isOnline: true,
+        lastSeen: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      });
+      console.log(`[DB] User registered in Firestore: ${finalUid}`);
+    } catch (e) {
+      console.warn('[DB] Failed to save user to Firestore:', e);
+    }
+  }
+
+  // Save to AsyncStorage for persistent login
+  await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+  return userData;
+};
+
+// Login: update user status in Firestore
+export const loginUser = async (phoneNumber: string): Promise<any> => {
+  if (!db) throw new Error('Database not available');
+
+  const usersRef = collection(db, 'users');
+  const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) {
+    throw new Error('User not found');
+  }
+
+  const userDoc = snapshot.docs[0];
+  const userData = userDoc.data();
+
+  // Update online status
+  try {
+    await setDoc(doc(db, 'users', userDoc.id), {
+      isOnline: true,
+      lastSeen: serverTimestamp(),
+    }, { merge: true });
+  } catch (e) {
+    console.warn('[DB] Failed to update user status:', e);
+  }
+
+  // Try Firebase anonymous sign-in
+  if (auth) {
+    try {
+      await signInAnonymously(auth);
+    } catch (e) {
+      console.warn('[AUTH] Firebase sign-in failed');
+    }
+  }
+
+  // Save to AsyncStorage
+  await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+  console.log(`[AUTH] User logged in: ${userData.uid}`);
+  return userData;
+};
+
+// ============ LOGOUT & AUTH STATE ============
 
 // Logout
 export const signOutUser = async (): Promise<void> => {
@@ -168,15 +257,13 @@ export const signOutUser = async (): Promise<void> => {
   }
 };
 
-// On auth state change - check AsyncStorage first
+// On auth state change
 export const onAuthStateChange = (callback: (user: User | null) => void) => {
-  // Check AsyncStorage for saved user
   AsyncStorage.getItem(AUTH_STORAGE_KEY).then((stored) => {
     if (stored) {
       const userData = JSON.parse(stored);
       callback(userData as any);
     } else if (auth) {
-      // Fallback to Firebase auth state
       onAuthStateChanged(auth, callback);
     } else {
       callback(null);
@@ -185,10 +272,8 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
     callback(null);
   });
 
-  // Return unsubscribe
   if (auth) {
     return onAuthStateChanged(auth, (firebaseUser) => {
-      // Only update if we don't have local auth
       AsyncStorage.getItem(AUTH_STORAGE_KEY).then((stored) => {
         if (!stored) {
           callback(firebaseUser);

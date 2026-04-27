@@ -12,11 +12,13 @@ import {
   Platform,
   Modal,
   Animated,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
+import { signOutUser } from '@/services/auth';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,8 @@ export default function EditProfileScreen() {
   const [lastName, setLastName] = useState(MOCK_USER.lastName);
   const [bio, setBio] = useState(MOCK_USER.bio);
   const [showAvatarSheet, setShowAvatarSheet] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Mock thumbnail images cho action sheet
   const MOCK_THUMBNAILS = [
@@ -98,7 +102,19 @@ export default function EditProfileScreen() {
   };
 
   const handleLogOut = () => {
-    console.log('[EditProfile] Log Out pressed');
+    setShowLogout(true);
+  };
+
+  const confirmLogOut = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOutUser();
+      setShowLogout(false);
+      router.replace('/(auth)/welcome');
+    } catch (error) {
+      console.error('[EditProfile] Logout error:', error);
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -342,6 +358,51 @@ export default function EditProfileScreen() {
         >
           <Text style={styles.sheetCancelText}>Cancel</Text>
         </TouchableOpacity>
+      </View>
+    </Modal>
+
+    {/* ── Logout Confirmation Modal ──────────────────────────── */}
+    <Modal
+      visible={showLogout}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowLogout(false)}
+    >
+      <View style={logoutStyles.overlay}>
+        <View style={logoutStyles.card}>
+          {/* Icon */}
+          <View style={logoutStyles.iconCircle}>
+            <Ionicons name="log-out-outline" size={32} color="#FF3B30" />
+          </View>
+
+          <Text style={logoutStyles.title}>Log Out</Text>
+          <Text style={logoutStyles.subtitle}>
+            Are you sure you want to log out of your account?
+          </Text>
+
+          {/* Buttons */}
+          <TouchableOpacity
+            style={logoutStyles.logoutBtn}
+            onPress={confirmLogOut}
+            activeOpacity={0.8}
+            disabled={isLoggingOut}
+          >
+            {isLoggingOut ? (
+              <Text style={logoutStyles.logoutBtnText}>Logging out...</Text>
+            ) : (
+              <Text style={logoutStyles.logoutBtnText}>Log Out</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={logoutStyles.cancelBtn}
+            onPress={() => setShowLogout(false)}
+            activeOpacity={0.8}
+          >
+            <Text style={logoutStyles.cancelBtnText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
     </>
@@ -652,3 +713,76 @@ const styles = StyleSheet.create({
   },
 });
 
+// ─── Logout Modal Styles ──────────────────────────────────────────────────────
+
+const logoutStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 28,
+    width: '78%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFF0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    letterSpacing: -0.1,
+  },
+  logoutBtn: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 14,
+    paddingVertical: 14,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  logoutBtnText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  cancelBtn: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 14,
+    paddingVertical: 14,
+    width: '100%',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#007AFF',
+    letterSpacing: -0.2,
+  },
+});

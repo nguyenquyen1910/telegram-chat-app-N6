@@ -10,19 +10,25 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { verifyEmailOTP, resendEmailOTP } from '@/services/auth';
+import { Ionicons } from '@expo/vector-icons';
+import { verifyEmailOTP, resendEmailOTP, loginUser } from '@/services/auth';
 
 const CODE_LENGTH = 6;
 
 export default function VerifyCodeScreen() {
-    const { phoneNumber, email } = useLocalSearchParams<{ phoneNumber: string; email: string }>();
+    const { phoneNumber, email, mode } = useLocalSearchParams<{
+        phoneNumber: string;
+        email: string;
+        mode: 'login' | 'register';
+    }>();
     const router = useRouter();
     const [code, setCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [countdown, setCountdown] = useState(60);
     const inputRef = useRef<TextInput>(null);
 
-    // Countdown timer for resend
+    const isLoginMode = mode === 'login';
+
     useEffect(() => {
         if (countdown <= 0) return;
         const timer = setInterval(() => {
@@ -31,12 +37,10 @@ export default function VerifyCodeScreen() {
         return () => clearInterval(timer);
     }, [countdown]);
 
-    // Auto focus input when open screen
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 300);
     }, []);
 
-    // When enter full code → auto verify
     useEffect(() => {
         if (code.length === CODE_LENGTH) {
             handleVerify();
@@ -48,10 +52,18 @@ export default function VerifyCodeScreen() {
         setIsLoading(true);
         try {
             await verifyEmailOTP(code);
-            // If success → redirect to main chat screen
-            router.replace('/(tabs)/chat');
+
+            if (isLoginMode) {
+                await loginUser(phoneNumber);
+                router.replace('/(tabs)/chat');
+            } else {
+                router.push({
+                    pathname: '/(auth)/verify-sms',
+                    params: { phoneNumber, email },
+                });
+            }
         } catch (error: any) {
-            Alert.alert('Sai mã', error.message || 'Mã xác thực không đúng. Vui lòng thử lại.');
+            Alert.alert('Sai mã', error.message || 'Mã xác thực không đúng.');
             setCode('');
         } finally {
             setIsLoading(false);
@@ -63,9 +75,9 @@ export default function VerifyCodeScreen() {
         try {
             await resendEmailOTP();
             setCountdown(60);
-            Alert.alert('Đã gửi', 'Mã xác thực mới đã được gửi tới email của bạn.');
+            Alert.alert('Đã gửi', 'Mã xác thực mới đã được gửi tới email.');
         } catch (error) {
-            Alert.alert('Lỗi', 'Không thể gửi lại mã. Vui lòng thử lại.');
+            Alert.alert('Lỗi', 'Không thể gửi lại mã.');
         }
     };
 
@@ -77,15 +89,19 @@ export default function VerifyCodeScreen() {
                     style={styles.backButton}
                     onPress={() => router.back()}
                 >
-                    <Text style={styles.backText}>← Back</Text>
+                    <Ionicons name="arrow-back" size={24} color="#007AFF" />
                 </TouchableOpacity>
 
                 {/* Header icon */}
                 <View style={styles.iconContainer}>
-                    <Text style={styles.lockIcon}>📧</Text>
+                    <View style={styles.iconCircle}>
+                        <Ionicons name="mail-outline" size={40} color="#007AFF" />
+                    </View>
                 </View>
 
-                <Text style={styles.title}>Enter Code</Text>
+                <Text style={styles.title}>
+                    {isLoginMode ? 'Login Verification' : 'Email Verification'}
+                </Text>
                 <Text style={styles.subtitle}>
                     We've sent a verification code to{'\n'}
                     <Text style={styles.emailText}>{email}</Text>
@@ -93,7 +109,7 @@ export default function VerifyCodeScreen() {
 
                 {/* Phone info */}
                 <View style={styles.phoneInfoRow}>
-                    <Text style={styles.phoneInfoLabel}>📞</Text>
+                    <Ionicons name="call-outline" size={16} color="#8E8E93" />
                     <Text style={styles.phoneInfoValue}>{phoneNumber}</Text>
                 </View>
 
@@ -115,7 +131,7 @@ export default function VerifyCodeScreen() {
                     ))}
                 </View>
 
-                {/* Hidden real input for keyboard */}
+                {/* Hidden input */}
                 <TextInput
                     ref={inputRef}
                     style={styles.hiddenInput}
@@ -130,154 +146,68 @@ export default function VerifyCodeScreen() {
                     autoFocus
                 />
 
-                {/* Loading indicator */}
                 {isLoading && (
-                    <ActivityIndicator
-                        size="large"
-                        color="#007AFF"
-                        style={{ marginTop: 24 }}
-                    />
+                    <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 24 }} />
                 )}
 
-                {/* Resend code button */}
+                {/* Resend */}
                 <TouchableOpacity
                     style={styles.resendButton}
                     onPress={handleResend}
                     disabled={countdown > 0}
                 >
-                    <Text
-                        style={[
-                            styles.resendText,
-                            countdown > 0 && styles.resendTextDisabled,
-                        ]}
-                    >
-                        {countdown > 0
-                            ? `Gửi lại mã sau ${countdown}s`
-                            : 'Gửi lại mã'}
+                    <Ionicons
+                        name="refresh-outline"
+                        size={16}
+                        color={countdown > 0 ? '#C7C7CC' : '#007AFF'}
+                        style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.resendText, countdown > 0 && styles.resendTextDisabled]}>
+                        {countdown > 0 ? `Gửi lại mã sau ${countdown}s` : 'Gửi lại mã'}
                     </Text>
                 </TouchableOpacity>
 
-                {/* Hint text */}
-                <Text style={styles.hintText}>
-                    💡 Check your email inbox (and spam folder) for the code.
-                </Text>
+                {/* Hint */}
+                <View style={styles.hintRow}>
+                    <Ionicons name="information-circle-outline" size={16} color="#8E8E93" />
+                    <Text style={styles.hintText}>
+                        Check your email inbox (and spam folder) for the code.
+                    </Text>
+                </View>
             </View>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
+    container: { flex: 1, backgroundColor: '#FFFFFF' },
+    content: { flex: 1, paddingHorizontal: 24, paddingTop: 16, alignItems: 'center' },
+    backButton: { alignSelf: 'flex-start', marginBottom: 16, padding: 8 },
+    iconContainer: { marginBottom: 16 },
+    iconCircle: {
+        width: 80, height: 80, borderRadius: 40,
+        backgroundColor: '#F0F7FF', justifyContent: 'center', alignItems: 'center',
     },
-    content: {
-        flex: 1,
-        paddingHorizontal: 24,
-        paddingTop: 20,
-        alignItems: 'center',
-    },
-    backButton: {
-        alignSelf: 'flex-start',
-        marginBottom: 16,
-        paddingVertical: 8,
-    },
-    backText: {
-        fontSize: 17,
-        color: '#007AFF',
-        fontWeight: '500',
-    },
-    iconContainer: {
-        marginBottom: 16,
-    },
-    lockIcon: {
-        fontSize: 64,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '700',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 15,
-        color: '#8E8E93',
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 16,
-    },
-    emailText: {
-        fontWeight: '600',
-        color: '#007AFF',
-    },
+    title: { fontSize: 24, fontWeight: '700', marginBottom: 8 },
+    subtitle: { fontSize: 15, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+    emailText: { fontWeight: '600', color: '#007AFF' },
     phoneInfoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F2F2F7',
-        borderRadius: 8,
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        marginBottom: 24,
+        flexDirection: 'row', alignItems: 'center', backgroundColor: '#F2F2F7',
+        borderRadius: 8, paddingVertical: 8, paddingHorizontal: 16, marginBottom: 24, gap: 8,
     },
-    phoneInfoLabel: {
-        fontSize: 16,
-        marginRight: 8,
-    },
-    phoneInfoValue: {
-        fontSize: 15,
-        fontWeight: '500',
-        color: '#000000',
-    },
-    codeContainer: {
-        flexDirection: 'row',
-        gap: 12,
-        marginBottom: 8,
-    },
+    phoneInfoValue: { fontSize: 15, fontWeight: '500', color: '#000000' },
+    codeContainer: { flexDirection: 'row', gap: 10, marginBottom: 8 },
     codeBox: {
-        width: 48,
-        height: 56,
-        borderRadius: 10,
-        borderWidth: 1.5,
-        borderColor: '#E5E5EA',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#F9F9F9',
+        width: 46, height: 54, borderRadius: 10, borderWidth: 1.5,
+        borderColor: '#E5E5EA', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9F9F9',
     },
-    codeBoxFilled: {
-        borderColor: '#007AFF',
-        backgroundColor: '#F0F7FF',
-    },
-    codeBoxActive: {
-        borderColor: '#007AFF',
-        borderWidth: 2,
-    },
-    codeDigit: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: '#000000',
-    },
-    hiddenInput: {
-        position: 'absolute',
-        opacity: 0,
-        height: 0,
-        width: 0,
-    },
-    resendButton: {
-        marginTop: 32,
-        paddingVertical: 12,
-    },
-    resendText: {
-        fontSize: 15,
-        color: '#007AFF',
-        fontWeight: '500',
-    },
-    resendTextDisabled: {
-        color: '#C7C7CC',
-    },
-    hintText: {
-        fontSize: 13,
-        color: '#8E8E93',
-        textAlign: 'center',
-        marginTop: 16,
-        lineHeight: 18,
-    },
+    codeBoxFilled: { borderColor: '#007AFF', backgroundColor: '#F0F7FF' },
+    codeBoxActive: { borderColor: '#007AFF', borderWidth: 2 },
+    codeDigit: { fontSize: 22, fontWeight: '700', color: '#000000' },
+    hiddenInput: { position: 'absolute', opacity: 0, height: 0, width: 0 },
+    resendButton: { flexDirection: 'row', alignItems: 'center', marginTop: 32, paddingVertical: 12 },
+    resendText: { fontSize: 15, color: '#007AFF', fontWeight: '500' },
+    resendTextDisabled: { color: '#C7C7CC' },
+    hintRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 6 },
+    hintText: { fontSize: 13, color: '#8E8E93', lineHeight: 18 },
 });
