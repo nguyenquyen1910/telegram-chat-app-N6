@@ -19,6 +19,8 @@ const FIXED_SMS_OTP = '123456';
 
 // Storage keys
 const AUTH_STORAGE_KEY = '@telegram_auth_user';
+const SESSION_KEY = '@telegram_last_active';
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 // OTP state
 let currentOTP: string | null = null;
@@ -41,9 +43,24 @@ export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> =>
     return false;
   }
   try {
+    // Ensure we have auth context for Firestore read
+    if (auth) {
+      try {
+        await signInAnonymously(auth);
+      } catch (e) {
+        console.warn('[AUTH] Anonymous sign-in for query failed:', e);
+      }
+    }
+
+    console.log(`[DB] Checking phone: "${phoneNumber}"`);
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
     const snapshot = await getDocs(q);
+    console.log(`[DB] Found ${snapshot.size} users with phone "${phoneNumber}"`);
+    if (!snapshot.empty) {
+      const data = snapshot.docs[0].data();
+      console.log(`[DB] User found: uid=${data.uid}, email=${data.email}`);
+    }
     return !snapshot.empty;
   } catch (error) {
     console.error('[DB] Error checking phone:', error);
@@ -200,6 +217,7 @@ export const registerUser = async (
 
   // Save to AsyncStorage for persistent login
   await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+  await updateLastActive();
   return userData;
 };
 
@@ -239,6 +257,7 @@ export const loginUser = async (phoneNumber: string): Promise<any> => {
 
   // Save to AsyncStorage
   await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+  await updateLastActive();
   console.log(`[AUTH] User logged in: ${userData.uid}`);
   return userData;
 };
@@ -248,6 +267,7 @@ export const loginUser = async (phoneNumber: string): Promise<any> => {
 // Logout
 export const signOutUser = async (): Promise<void> => {
   await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+  await AsyncStorage.removeItem(SESSION_KEY);
   if (auth) {
     try {
       await firebaseSignOut(auth);
@@ -257,11 +277,35 @@ export const signOutUser = async (): Promise<void> => {
   }
 };
 
-// On auth state change
+// Update last active timestamp (call this when app is active)
+export const updateLastActive = async (): Promise<void> => {
+  await AsyncStorage.setItem(SESSION_KEY, Date.now().toString());
+};
+
+// On auth state change - check session timeout
 export const onAuthStateChange = (callback: (user: User | null) => void) => {
-  AsyncStorage.getItem(AUTH_STORAGE_KEY).then((stored) => {
+  AsyncStorage.multiGet([AUTH_STORAGE_KEY, SESSION_KEY]).then((stores) => {
+    const stored = stores[0][1];
+    const lastActive = stores[1][1];
+
     if (stored) {
+      // Check session timeout
+      if (lastActive) {
+        const elapsed = Date.now() - parseInt(lastActive, 10);
+        if (elapsed > SESSION_TIMEOUT_MS) {
+          // Session expired → clear and require re-login
+          console.log(`[AUTH] Session expired (${Math.round(elapsed / 1000)}s ago)`);
+          AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+          AsyncStorage.removeItem(SESSION_KEY);
+          callback(null);
+          return;
+        }
+      }
+      // Session valid → restore user
       const userData = JSON.parse(stored);
+      // Update last active
+      AsyncStorage.setItem(SESSION_KEY, Date.now().toString());
+      console.log('[AUTH] Session restored');
       callback(userData as any);
     } else if (auth) {
       onAuthStateChanged(auth, callback);
