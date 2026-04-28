@@ -19,17 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import { signOutUser } from '@/services/auth';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const MOCK_USER = {
-  firstName: 'Jacob W.',
-  lastName: '',
-  bio: 'Digital goodies designer - Pixsellz',
-  phone: '+1 202 555 0147',
-  username: '@jacob_designer',
-  avatar: null as string | null,
-};
+import { useAuth } from '@/context/AuthContext';
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -38,10 +28,19 @@ export default function EditProfileScreen() {
   // useNavigation().goBack() đáng tin cậy hơn router.back() trong Expo Router
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
-  const [firstName, setFirstName] = useState(MOCK_USER.firstName);
-  const [lastName, setLastName] = useState(MOCK_USER.lastName);
-  const [bio, setBio] = useState(MOCK_USER.bio);
+  // Parse displayName into first/last name
+  const nameParts = (user?.displayName || '').split(' ');
+  const initialFirst = nameParts[0] || '';
+  const initialLast = nameParts.slice(1).join(' ') || '';
+
+  const userAvatar = user?.avatarUrl || user?.photoURL || null;
+  const userPhone = user?.phoneNumber || '';
+
+  const [firstName, setFirstName] = useState(initialFirst);
+  const [lastName, setLastName] = useState(initialLast);
+  const [bio, setBio] = useState('');
   const [showAvatarSheet, setShowAvatarSheet] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -163,8 +162,8 @@ export default function EditProfileScreen() {
           <View style={styles.nameSection}>
             {/* Avatar */}
             <TouchableOpacity style={styles.avatarWrapper} onPress={handleAvatarPress}>
-              {MOCK_USER.avatar ? (
-                <Image source={{ uri: MOCK_USER.avatar }} style={styles.avatar} />
+              {userAvatar ? (
+                <Image source={{ uri: userAvatar }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarFallback}>
                   <Ionicons name="person" size={32} color="#FFFFFF" />
@@ -238,7 +237,7 @@ export default function EditProfileScreen() {
             >
               <Text style={styles.infoLabel}>Change Number</Text>
               <View style={styles.infoTrail}>
-                <Text style={styles.infoValue}>{MOCK_USER.phone}</Text>
+                <Text style={styles.infoValue}>{userPhone}</Text>
                 <Ionicons name="chevron-forward" size={17} color="rgba(60,60,67,0.3)" />
               </View>
             </TouchableOpacity>
@@ -254,7 +253,7 @@ export default function EditProfileScreen() {
             >
               <Text style={styles.infoLabel}>Username</Text>
               <View style={styles.infoTrail}>
-                <Text style={styles.infoValue}>{MOCK_USER.username}</Text>
+                <Text style={styles.infoValue}>{user?.displayName ? `@${user.displayName.toLowerCase().replace(/\s+/g, '_')}` : ''}</Text>
                 <Ionicons name="chevron-forward" size={17} color="rgba(60,60,67,0.3)" />
               </View>
             </TouchableOpacity>
