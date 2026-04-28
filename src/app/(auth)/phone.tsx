@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { checkPhoneExists, getEmailByPhone, sendEmailOTP } from '@/services/auth';
+import { useAuth } from '@/context/AuthContext';
 
 // List of popular countries
 const COUNTRIES = [
@@ -27,6 +28,7 @@ const COUNTRIES = [
 
 export default function PhoneScreen() {
   const router = useRouter();
+  const { setIsVerifying } = useAuth();
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
@@ -47,6 +49,10 @@ export default function PhoneScreen() {
     setShowConfirm(false);
     setIsChecking(true);
 
+    // Mark as verifying BEFORE any Firebase call to prevent auth redirect
+    // (signInAnonymously inside checkPhoneExists triggers auth state change)
+    setIsVerifying(true);
+
     try {
       const exists = await checkPhoneExists(fullPhoneNumber);
 
@@ -55,6 +61,7 @@ export default function PhoneScreen() {
         // Phone exists → get email → send OTP → go to verify
         const email = await getEmailByPhone(fullPhoneNumber);
         if (!email) {
+          setIsVerifying(false);
           Alert.alert('Lỗi', 'Không tìm thấy email liên kết với số điện thoại này.');
           return;
         }
@@ -70,12 +77,15 @@ export default function PhoneScreen() {
       } else {
         // ===== REGISTER FLOW =====
         // Phone doesn't exist → go to enter email
+        // Clear verifying since register flow will set it again when needed
+        setIsVerifying(false);
         router.push({
           pathname: '/(auth)/enter-email',
           params: { phoneNumber: fullPhoneNumber },
         });
       }
     } catch (error: any) {
+      setIsVerifying(false);
       console.error('Phone check error:', error);
       Alert.alert('Lỗi', 'Không thể kiểm tra số điện thoại. Vui lòng thử lại.');
     } finally {
