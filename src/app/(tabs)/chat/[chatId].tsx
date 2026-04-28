@@ -8,10 +8,12 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Keyboard,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
+import * as Clipboard from 'expo-clipboard';
 import { Message } from '@/types/chat';
 import { formatLastSeen } from '@/constants/chat';
 import { useAuth } from '@/context/AuthContext';
@@ -26,6 +28,9 @@ import MessageInput from '@/components/chat/MessageInput';
 import WallpaperPicker from '@/components/chat/WallpaperPicker';
 import ChatOptionsMenu from '@/components/chat/ChatOptionsMenu';
 import ChatSearchBar from '@/components/chat/ChatSearchBar';
+import AttachmentPicker from '@/components/chat/AttachmentPicker';
+import MediaViewer from '@/components/chat/MediaViewer';
+import MessageActionMenu from '@/components/chat/MessageActionMenu';
 
 // Separator key cho "Tin nhắn chưa đọc"
 const UNREAD_SEPARATOR_ID = '__unread_separator__';
@@ -43,13 +48,19 @@ export default function ChatDetailScreen() {
   const currentUid = (user as any)?.uid || null;
 
   const { conversation, otherUser, lastReadBy } = useConversation(chatId || null, currentUid);
-  const { messages, loading, loadingMore, sending, sendTextMessage, sendImageMessage, loadMore, hasMore } =
+  const { messages, loading, loadingMore, sending, sendTextMessage, sendImageMessage, sendFileMessage, loadMore, hasMore, handleRevokeMessage, handleDeleteForMe, handleToggleReaction, handleEditMessage } =
     useMessages(chatId || null, currentUid);
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [pendingImage, setPendingImage] = useState<{ uri: string; fileName: string } | null>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
+  const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
+  const [mediaViewerUrl, setMediaViewerUrl] = useState<string | null>(null);
+  const [mediaViewerFileName, setMediaViewerFileName] = useState<string | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [initialLastRead, setInitialLastRead] = useState<Timestamp | null>(null);
   const [hasMarkedRead, setHasMarkedRead] = useState(false);
   // Search state
@@ -66,6 +77,23 @@ export default function ChatDetailScreen() {
     setCurrentOpenChat(chatId || null);
     return () => setCurrentOpenChat(null);
   }, [chatId]);
+
+  // Keyboard listener
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Mute state
   const isMuted = useMemo(() => {
@@ -191,6 +219,34 @@ export default function ChatDetailScreen() {
     setReplyingTo(msg);
   }, []);
 
+  // Message action handlers
+  const handleCopy = useCallback((text: string) => {
+    Clipboard.setStringAsync(text);
+  }, []);
+
+  const handleEdit = useCallback((msg: Message) => {
+    setEditingMessage(msg);
+    setReplyingTo(null);
+  }, []);
+
+  const handleRevoke = useCallback((messageId: string) => {
+    Alert.alert('Thu hồi tin nhắn', 'Tin nhắn sẽ bị thu hồi cho cả 2 bên?', [
+      { text: 'Huỷ', style: 'cancel' },
+      { text: 'Thu hồi', style: 'destructive', onPress: () => handleRevokeMessage(messageId) },
+    ]);
+  }, [handleRevokeMessage]);
+
+  const handleDelete = useCallback((messageId: string) => {
+    Alert.alert('Xoá tin nhắn', 'Tin nhắn chỉ bị xoá ở phía bạn.', [
+      { text: 'Huỷ', style: 'cancel' },
+      { text: 'Xoá', style: 'destructive', onPress: () => handleDeleteForMe(messageId) },
+    ]);
+  }, [handleDeleteForMe]);
+
+  const handleReaction = useCallback((messageId: string, emoji: string) => {
+    handleToggleReaction(messageId, emoji);
+  }, [handleToggleReaction]);
+
   const handleSendText = useCallback(
     async (text: string) => {
       const replyTo = replyingTo
@@ -213,30 +269,22 @@ export default function ChatDetailScreen() {
     [replyingTo, sendTextMessage, otherUser, isOutgoing]
   );
 
-  const handlePickImage = useCallback(async () => {
-    try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Cần quyền truy cập', 'Vui lòng cho phép truy cập thư viện ảnh.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.7,
-        allowsEditing: false,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const fileName = asset.fileName || `IMG_${Date.now()}.jpg`;
-        setPendingImage({ uri: asset.uri, fileName });
-      }
-    } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Lỗi', 'Không thể chọn ảnh.');
-    }
+  const handlePickImage = useCallback((uri: string, fileName: string) => {
+    setPendingImage({ uri, fileName });
   }, []);
+
+  const handlePickFile = useCallback(async (uri: string, fileName: string, fileSize: number, mimeType: string) => {
+    if (mimeType.startsWith('image/')) {
+      // Ảnh thì dùng flow gửi ảnh
+      setPendingImage({ uri, fileName });
+    } else {
+      // File thường: upload lên Cloudinary rồi gửi message
+      await sendFileMessage(uri, fileName, fileSize, mimeType);
+      setTimeout(() => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }, 100);
+    }
+  }, [sendFileMessage]);
 
   const handleSendImage = useCallback(
     async (uri: string, fileName: string, caption: string) => {
@@ -315,13 +363,26 @@ export default function ChatDetailScreen() {
           isOutgoing={isOutgoing(item.message)}
           senderName={otherUser?.displayName}
           isHighlighted={item.id === highlightedMessageId}
-          onReply={handleReply}
-          onImagePress={(url) => console.log('Open image:', url)}
+          currentUid={currentUid || undefined}
+          onLongPress={(msg) => setSelectedMessage(msg)}
+          onImagePress={(url) => setMediaViewerUrl(url)}
+          onFilePress={(url, name) => {
+            setMediaViewerUrl(url);
+            setMediaViewerFileName(name);
+          }}
         />
       );
     },
-    [isOutgoing, otherUser, handleReply, highlightedMessageId]
+    [isOutgoing, otherUser, highlightedMessageId, currentUid]
   );
+
+  // Detect media type for viewer
+  const mediaViewerType: 'image' | 'video' | 'file' = mediaViewerUrl
+    ? (mediaViewerFileName
+      ? 'file'
+      : mediaViewerUrl.includes('/video/upload/') || /\.(mp4|mov|avi|mkv|webm|3gp)(\?|$)/i.test(mediaViewerUrl)
+        ? 'video' : 'image')
+    : 'image';
 
   const wallpaperBg = currentWallpaper.colors[0];
 
@@ -337,7 +398,7 @@ export default function ChatDetailScreen() {
     <View style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : (isKeyboardVisible ? 'padding' : undefined)}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {showSearch ? (
@@ -416,7 +477,7 @@ export default function ChatDetailScreen() {
 
         <MessageInput
           onSendText={handleSendText}
-          onPickImage={handlePickImage}
+          onAttach={() => setShowAttachmentPicker(true)}
           onSendImage={handleSendImage}
           pendingImage={pendingImage}
           onCancelImage={() => setPendingImage(null)}
@@ -429,6 +490,12 @@ export default function ChatDetailScreen() {
               : undefined
           }
           onCancelReply={() => setReplyingTo(null)}
+          editingMessage={editingMessage}
+          onCancelEdit={() => setEditingMessage(null)}
+          onSaveEdit={(messageId, newText) => {
+            handleEditMessage(messageId, newText);
+            setEditingMessage(null);
+          }}
         />
       </KeyboardAvoidingView>
 
@@ -449,6 +516,40 @@ export default function ChatDetailScreen() {
         onClose={() => setShowWallpaperPicker(false)}
         currentWallpaperId={currentWallpaper.id}
         onSelect={setWallpaper}
+      />
+
+      <AttachmentPicker
+        visible={showAttachmentPicker}
+        onClose={() => setShowAttachmentPicker(false)}
+        onPickImage={handlePickImage}
+        onPickFile={handlePickFile}
+      />
+
+      <MediaViewer
+        visible={!!mediaViewerUrl}
+        mediaUrl={mediaViewerUrl || ''}
+        mediaType={mediaViewerType}
+        fileName={mediaViewerFileName || undefined}
+        onClose={() => {
+          setMediaViewerUrl(null);
+          setMediaViewerFileName(null);
+        }}
+      />
+
+      <MessageActionMenu
+        visible={!!selectedMessage}
+        message={selectedMessage}
+        isOutgoing={selectedMessage ? isOutgoing(selectedMessage) : false}
+        onClose={() => setSelectedMessage(null)}
+        onReply={(msg) => {
+          setSelectedMessage(null);
+          handleReply(msg);
+        }}
+        onCopy={handleCopy}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onRevoke={handleRevoke}
+        onReaction={handleReaction}
       />
     </View>
   );

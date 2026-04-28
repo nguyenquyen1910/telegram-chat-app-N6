@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, TouchableOpacity, Image, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MessageInputProps } from '@/types/chat';
@@ -6,22 +6,41 @@ import ReplyPreview from './ReplyPreview';
 
 export default function MessageInput({
   onSendText,
-  onPickImage,
+  onAttach,
   onSendImage,
   pendingImage,
   onCancelImage,
   replyingTo,
   replyingSenderName,
   onCancelReply,
+  editingMessage,
+  onCancelEdit,
+  onSaveEdit,
 }: MessageInputProps) {
   const [text, setText] = useState('');
   const inputRef = useRef<TextInput>(null);
   const hasText = text.trim().length > 0;
   const hasPendingImage = !!pendingImage;
 
+  // Fill text when editing starts
+  useEffect(() => {
+    if (editingMessage) {
+      setText(editingMessage.text || '');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [editingMessage]);
+
   const handleSend = () => {
+    // Editing mode — save edit
+    if (editingMessage) {
+      if (hasText) {
+        onSaveEdit(editingMessage.id, text.trim());
+        setText('');
+      }
+      return;
+    }
+
     if (hasPendingImage) {
-      // Gửi ảnh kèm caption
       onSendImage(pendingImage!.uri, pendingImage!.fileName, text.trim());
       setText('');
       return;
@@ -34,8 +53,22 @@ export default function MessageInput({
 
   return (
     <View style={styles.container}>
+      {/* Edit preview bar */}
+      {editingMessage && (
+        <View style={styles.editBar}>
+          <View style={styles.editBarLine} />
+          <View style={styles.editBarContent}>
+            <Text style={styles.editBarLabel}>Đang sửa tin nhắn</Text>
+            <Text style={styles.editBarText} numberOfLines={1}>{editingMessage.text}</Text>
+          </View>
+          <TouchableOpacity onPress={() => { onCancelEdit(); setText(''); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="close-circle" size={22} color="#8E8E93" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Reply preview bar */}
-      {replyingTo && (
+      {!editingMessage && replyingTo && (
         <ReplyPreview
           senderName={replyingSenderName || 'User'}
           messageText={replyingTo.type === 'image' ? '📷 Ảnh' : replyingTo.text}
@@ -81,7 +114,7 @@ export default function MessageInput({
         </View>
 
         {/* Attach button */}
-        <TouchableOpacity onPress={onPickImage} style={styles.iconButton}>
+        <TouchableOpacity onPress={onAttach} style={styles.iconButton}>
           <Ionicons
             name="attach"
             size={26}
@@ -182,5 +215,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
+  },
+  // ======= Edit Bar =======
+  editBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: '#E5E5E5',
+  },
+  editBarLine: {
+    width: 2,
+    height: 36,
+    backgroundColor: '#50A8EB',
+    borderRadius: 1,
+    marginRight: 12,
+  },
+  editBarContent: {
+    flex: 1,
+  },
+  editBarLabel: {
+    color: '#50A8EB',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  editBarText: {
+    color: '#8E8E93',
+    fontSize: 14,
+    marginTop: 2,
   },
 });
