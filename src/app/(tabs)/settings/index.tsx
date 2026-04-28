@@ -11,16 +11,9 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/context/AuthContext';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-// Tạm thời dùng mock data, sau này thay bằng dữ liệu thật từ auth/API
 
-const MOCK_USER = {
-  name: 'Jacob W.',
-  phone: '+1 202 555 0147',
-  username: '@jacob_d',
-  avatar: null as string | null,
-};
 
 const MOCK_ACCOUNTS = [
   { id: 'acc_1', name: 'Jacob Design', avatar: null as string | null },
@@ -82,6 +75,12 @@ const TAB_BAR_HEIGHT = 83;
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
+  // Use real auth data
+  const profileName = user?.displayName || 'User';
+  const profilePhone = user?.phoneNumber || '';
+  const profileAvatar = user?.avatarUrl || user?.photoURL || null;
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#F6F6F6" />
@@ -131,12 +130,12 @@ export default function SettingsScreen() {
             activeOpacity={0.7}
             style={styles.profileRow}
             onPress={() =>
-              console.log('[Settings] Profile pressed – user:', MOCK_USER.name)
+              console.log('[Settings] Profile pressed – user:', profileName)
             }
           >
             <View style={styles.avatarWrapper}>
-              {MOCK_USER.avatar ? (
-                <Image source={{ uri: MOCK_USER.avatar }} style={styles.avatar} />
+              {profileAvatar ? (
+                <Image source={{ uri: profileAvatar }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarFallback}>
                   <Ionicons name="person" size={36} color="#FFFFFF" />
@@ -145,9 +144,8 @@ export default function SettingsScreen() {
             </View>
 
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{MOCK_USER.name}</Text>
-              <Text style={styles.profileSub}>{MOCK_USER.phone}</Text>
-              <Text style={styles.profileSub}>{MOCK_USER.username}</Text>
+              <Text style={styles.profileName}>{profileName}</Text>
+              <Text style={styles.profileSub}>{profilePhone}</Text>
             </View>
 
             <ChevronRight />
