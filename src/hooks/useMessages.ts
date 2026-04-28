@@ -12,6 +12,7 @@ import { MESSAGES_PER_PAGE } from '@/constants/chat';
 interface UseMessagesReturn {
   messages: Message[];
   loading: boolean;
+  loadingMore: boolean;
   sending: boolean;
   error: string | null;
   hasMore: boolean;
@@ -30,6 +31,7 @@ export function useMessages(
 ): UseMessagesReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -84,22 +86,29 @@ export function useMessages(
 
   // Load more (pagination - scroll lên)
   const loadMore = useCallback(async () => {
-    if (!conversationId || !hasMore || loading) return;
+    if (!conversationId || !hasMore || loading || loadingMore) return;
 
     try {
+      setLoadingMore(true);
       const result = await getMessages(
         conversationId,
         MESSAGES_PER_PAGE,
         lastDocRef.current ?? undefined
       );
 
-      setMessages((prev) => [...result.messages, ...prev]);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const filtered = result.messages.filter((m) => !existingIds.has(m.id));
+        return [...filtered, ...prev];
+      });
       lastDocRef.current = result.lastVisible;
       setHasMore(result.messages.length >= MESSAGES_PER_PAGE);
     } catch (err) {
       console.error('Error loading more messages:', err);
+    } finally {
+      setLoadingMore(false);
     }
-  }, [conversationId, hasMore, loading]);
+  }, [conversationId, hasMore, loading, loadingMore]);
 
   // Gửi tin nhắn text
   const sendTextMessage = useCallback(
@@ -190,6 +199,7 @@ export function useMessages(
   return {
     messages,
     loading,
+    loadingMore,
     sending,
     error,
     hasMore,

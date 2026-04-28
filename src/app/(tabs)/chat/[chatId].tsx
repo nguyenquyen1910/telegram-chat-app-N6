@@ -1,6 +1,7 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
+  Text,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -8,18 +9,30 @@ import {
   Alert,
   StyleSheet,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Timestamp } from 'firebase/firestore';
 import { Message } from '@/types/chat';
 import { formatLastSeen } from '@/constants/chat';
 import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
 import { useChatWallpaper } from '@/hooks/useChatWallpaper';
+import { markConversationAsRead } from '@/services/chatService';
 import ChatHeader from '@/components/chat/ChatHeader';
 import MessageBubble from '@/components/chat/MessageBubble';
 import MessageInput from '@/components/chat/MessageInput';
 import WallpaperPicker from '@/components/chat/WallpaperPicker';
 import ChatOptionsMenu from '@/components/chat/ChatOptionsMenu';
+
+// Separator key cho "Tin nhắn chưa đọc"
+const UNREAD_SEPARATOR_ID = '__unread_separator__';
+
+interface ListItem {
+  id: string;
+  type: 'message' | 'unread-separator';
+  message?: Message;
+}
 
 export default function ChatDetailScreen() {
   const router = useRouter();
@@ -27,17 +40,124 @@ export default function ChatDetailScreen() {
   const { user } = useAuth();
   const currentUid = (user as any)?.uid || null;
 
-  const { conversation, otherUser } = useConversation(chatId || null, currentUid);
-  const { messages, loading, sending, sendTextMessage, sendImageMessage, loadMore, hasMore } =
+  const { conversation, otherUser, lastReadBy } = useConversation(chatId || null, currentUid);
+  const { messages, loading, loadingMore, sending, sendTextMessage, sendImageMessage, loadMore, hasMore } =
     useMessages(chatId || null, currentUid);
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [pendingImage, setPendingImage] = useState<{ uri: string; fileName: string } | null>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
+  const [initialLastRead, setInitialLastRead] = useState<Timestamp | null>(null);
+  const [hasMarkedRead, setHasMarkedRead] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const scrolledToInitial = useRef(false);
 
-  const { currentWallpaper, setWallpaper } = useChatWallpaper();
+  const { currentWallpaper, setWallpaper } = useChatWallpaper(chatId || null);
+
+  // Lưu lastReadBy[currentUid] lần đầu khi mở chat (để biết tin nhắn nào chưa đọc)
+  useEffect(() => {
+    if (lastReadBy && currentUid && initialLastRead === null) {
+      const myLastRead = lastReadBy[currentUid] || undefined;
+      if (myLastRead) {
+        setInitialLastRead(myLastRead);
+      } else {
+        // Chưa từng đọc → dùng epoch 0 để TẤT CẢ tin nhắn đều là "chưa đọc"
+        // Nhưng nếu không muốn hiện separator khi chưa có lần đọc trước → scroll to end
+        setInitialLastRead(Timestamp.fromMillis(0));
+      }
+    }
+  }, [lastReadBy, currentUid, initialLastRead]);
+
+  // Mark conversation as read khi mở chat
+  useEffect(() => {
+    if (chatId && currentUid && !loading && messages.length > 0 && !hasMarkedRead) {
+      markConversationAsRead(chatId, currentUid);
+      setHasMarkedRead(true);
+    }
+  }, [chatId, currentUid, loading, messages.length, hasMarkedRead]);
+
+  // Tìm otherUid
+  const otherUid = useMemo(() => {
+    if (!conversation || !currentUid) return null;
+    return conversation.participants.find((uid) => uid !== currentUid) || null;
+  }, [conversation, currentUid]);
+
+  // Tính toán read status cho outgoing messages dựa trên lastReadBy[otherUid]
+  const getComputedStatus = useCallback(
+    (msg: Message): Message['status'] => {
+      // Chỉ tính cho outgoing messages
+      if (msg.senderId !== currentUid) return msg.status;
+      if (msg.status === 'sending') return 'sending';
+
+      // So sánh lastReadBy[otherUid] với message.createdAt
+      if (otherUid && lastReadBy && lastReadBy[otherUid]) {
+        const otherReadAt = lastReadBy[otherUid];
+        const msgTime = msg.createdAt;
+        if (msgTime && otherReadAt) {
+          const msgMs = msgTime.toMillis?.() || 0;
+          const readMs = otherReadAt.toMillis?.() || 0;
+          if (readMs >= msgMs) return 'read';
+        }
+      }
+      return 'sent';
+    },
+    [currentUid, otherUid, lastReadBy]
+  );
+
+  // Build danh sách items: messages + unread separator
+  const listItems: ListItem[] = useMemo(() => {
+    if (messages.length === 0) return [];
+
+    const items: ListItem[] = [];
+    let separatorInserted = false;
+    const readMs = initialLastRead?.toMillis?.() || 0;
+
+    for (const msg of messages) {
+      // Chèn separator trước tin nhắn chưa đọc đầu tiên từ người khác
+      if (
+        !separatorInserted &&
+        msg.senderId !== currentUid &&
+        initialLastRead !== null &&
+        readMs > 0
+      ) {
+        const msgMs = msg.createdAt?.toMillis?.() || 0;
+        if (msgMs > readMs) {
+          items.push({ id: UNREAD_SEPARATOR_ID, type: 'unread-separator' });
+          separatorInserted = true;
+        }
+      }
+
+      items.push({
+        id: msg.id,
+        type: 'message',
+        message: { ...msg, status: getComputedStatus(msg) },
+      });
+    }
+
+    return items;
+  }, [messages, currentUid, initialLastRead, getComputedStatus]);
+
+  // Dữ liệu đảo ngược cho inverted FlatList (mới nhất ở đầu)
+  const invertedItems = useMemo(() => [...listItems].reverse(), [listItems]);
+
+  // Scroll đến unread separator 1 lần duy nhất sau khi load
+  useEffect(() => {
+    if (scrolledToInitial.current || invertedItems.length === 0) return;
+    scrolledToInitial.current = true;
+
+    const unreadIndex = invertedItems.findIndex(item => item.id === UNREAD_SEPARATOR_ID);
+    if (unreadIndex > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: unreadIndex,
+          animated: false,
+          viewPosition: 0.9,
+        });
+      }, 300);
+    }
+    // Không có separator → FlatList inverted tự hiện cuối (index 0 = tin mới nhất)
+  }, [invertedItems]);
 
   const isOutgoing = useCallback(
     (msg: Message) => msg.senderId === currentUid,
@@ -64,17 +184,14 @@ export default function ChatDetailScreen() {
       setReplyingTo(null);
 
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
     },
     [replyingTo, sendTextMessage, otherUser, isOutgoing]
   );
 
-  // Chọn ảnh từ thư viện — KHÔNG gửi ngay, chỉ set pending
   const handlePickImage = useCallback(async () => {
     try {
-      const ImagePicker = await import('expo-image-picker');
-
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
         Alert.alert('Cần quyền truy cập', 'Vui lòng cho phép truy cập thư viện ảnh.');
@@ -90,7 +207,6 @@ export default function ChatDetailScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const fileName = asset.fileName || `IMG_${Date.now()}.jpg`;
-        // Set pending image → MessageInput sẽ hiện preview
         setPendingImage({ uri: asset.uri, fileName });
       }
     } catch (error) {
@@ -99,33 +215,45 @@ export default function ChatDetailScreen() {
     }
   }, []);
 
-  // Gửi ảnh kèm caption từ MessageInput
   const handleSendImage = useCallback(
     async (uri: string, fileName: string, caption: string) => {
       setPendingImage(null);
       await sendImageMessage(uri, fileName, caption || undefined);
 
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
     },
     [sendImageMessage]
   );
 
-  const renderMessage = useCallback(
-    ({ item }: { item: Message }) => (
-      <MessageBubble
-        message={item}
-        isOutgoing={isOutgoing(item)}
-        senderName={otherUser?.displayName}
-        onReply={handleReply}
-        onImagePress={(url) => console.log('Open image:', url)}
-      />
-    ),
+  const renderItem = useCallback(
+    ({ item }: { item: ListItem }) => {
+      if (item.type === 'unread-separator') {
+        return (
+          <View style={styles.unreadSeparator}>
+            <View style={styles.unreadLine} />
+            <Text style={styles.unreadText}>Tin nhắn chưa đọc</Text>
+            <View style={styles.unreadLine} />
+          </View>
+        );
+      }
+
+      if (!item.message) return null;
+
+      return (
+        <MessageBubble
+          message={item.message}
+          isOutgoing={isOutgoing(item.message)}
+          senderName={otherUser?.displayName}
+          onReply={handleReply}
+          onImagePress={(url) => console.log('Open image:', url)}
+        />
+      );
+    },
     [isOutgoing, otherUser, handleReply]
   );
 
-  // Tính background color từ wallpaper
   const wallpaperBg = currentWallpaper.colors[0];
 
   if (loading) {
@@ -140,10 +268,9 @@ export default function ChatDetailScreen() {
     <View style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Header */}
         <ChatHeader
           userName={otherUser?.displayName || 'User'}
           userAvatar={otherUser?.avatarUrl || ''}
@@ -160,9 +287,7 @@ export default function ChatDetailScreen() {
           onMenuPress={() => setShowOptionsMenu(true)}
         />
 
-        {/* Messages area with wallpaper background */}
         <View style={[styles.messagesArea, { backgroundColor: wallpaperBg }]}>
-          {/* Gradient overlay for two-tone wallpapers */}
           {currentWallpaper.type === 'gradient' && currentWallpaper.colors.length >= 2 && (
             <View
               style={[
@@ -177,26 +302,34 @@ export default function ChatDetailScreen() {
 
           <FlatList
             ref={flatListRef}
-            data={messages}
-            renderItem={renderMessage}
+            data={invertedItems}
+            renderItem={renderItem}
             keyExtractor={(item) => item.id}
+            inverted
             contentContainerStyle={styles.messagesContent}
             showsVerticalScrollIndicator={false}
             onEndReached={hasMore ? loadMore : undefined}
             onEndReachedThreshold={0.3}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.loadingMoreContainer}>
+                  <ActivityIndicator size="small" color="#50A8EB" />
+                </View>
+              ) : null
+            }
             initialNumToRender={15}
             maxToRenderPerBatch={10}
             windowSize={10}
             removeClippedSubviews={Platform.OS === 'android'}
-            onContentSizeChange={() => {
-              if (messages.length > 0) {
-                flatListRef.current?.scrollToEnd({ animated: false });
-              }
+            onScrollToIndexFailed={(info) => {
+              flatListRef.current?.scrollToOffset({
+                offset: info.averageItemLength * info.index,
+                animated: false,
+              });
             }}
           />
         </View>
 
-        {/* Input bar */}
         <MessageInput
           onSendText={handleSendText}
           onPickImage={handlePickImage}
@@ -215,14 +348,12 @@ export default function ChatDetailScreen() {
         />
       </KeyboardAvoidingView>
 
-      {/* Chat options menu */}
       <ChatOptionsMenu
         visible={showOptionsMenu}
         onClose={() => setShowOptionsMenu(false)}
         onChangeWallpaper={() => setShowWallpaperPicker(true)}
       />
 
-      {/* Wallpaper picker */}
       <WallpaperPicker
         visible={showWallpaperPicker}
         onClose={() => setShowWallpaperPicker(false)}
@@ -253,5 +384,30 @@ const styles = StyleSheet.create({
   messagesContent: {
     paddingVertical: 8,
     paddingHorizontal: 4,
+  },
+  // ======= Unread Separator =======
+  unreadSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  unreadLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#50A8EB',
+    opacity: 0.4,
+  },
+  unreadText: {
+    color: '#50A8EB',
+    fontSize: 14,
+    fontWeight: '600',
+    marginHorizontal: 12,
+  },
+  // ======= Loading More =======
+  loadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
