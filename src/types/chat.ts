@@ -1,4 +1,5 @@
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, FieldValue } from "firebase/firestore";
+import { MediaStream, RTCPeerConnection, RTCIceCandidate } from "react-native-webrtc";
 
 // ==================== User ====================
 export interface User {
@@ -25,14 +26,14 @@ export interface Conversation {
   participants: string[];
   lastMessage: LastMessage | null;
   updatedAt: Timestamp;
-  type: 'private' | 'group';
+  type: "private" | "group";
   groupName?: string;
   groupAvatar?: string;
 }
 
 // ==================== Message ====================
-export type MessageType = 'text' | 'image' | 'file' | 'reply';
-export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
+export type MessageType = "text" | "image" | "file" | "reply";
+export type MessageStatus = "sending" | "sent" | "delivered" | "read";
 
 export interface ReplyTo {
   messageId: string;
@@ -70,6 +71,9 @@ export interface ChatHeaderProps {
   isOnline: boolean;
   onBackPress: () => void;
   onProfilePress: () => void;
+  userId?: string;
+  onVoiceCallPress?: () => void;
+  onVideoCallPress?: () => void;
 }
 
 export interface MessageBubbleProps {
@@ -101,4 +105,42 @@ export interface ReplyPreviewProps {
   onCancel?: () => void;
   /** Whether this is inline in a bubble (no cancel button) */
   isInBubble?: boolean;
+}
+
+// WebRCT types
+export type CallType = "voice" | "video";
+export type CallStatus =
+  | "ringing"
+  | "connected"
+  | "ended"
+  | "missed"
+  | "rejected";
+export type CallDirection = "incoming" | "outgoing";
+
+
+export interface CallMetadata {
+  id: string;
+  type: CallType;
+  callerId: string;
+  calleeId: string;
+  status: CallStatus;
+  direction: CallDirection;
+  startedAt: Timestamp | FieldValue;
+  endedAt?: Timestamp | FieldValue;
+  duration?: number;
+  offerSDP?: string;
+  answerSDP?: string;
+  iceCandidates: RTCIceCandidate[];
+}
+
+export interface ActiveCall {
+  callId: string;
+  metaData: CallMetadata;
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
+  peerConnection: RTCPeerConnection | null;
+  isMuted: boolean;
+  isVideoOff: boolean;
+  isSpeakerOn: boolean;
+  duration: number;
 }

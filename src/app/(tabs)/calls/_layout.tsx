@@ -2,11 +2,11 @@ import { Stack } from 'expo-router';
 
 export default function CallsLayout() {
   return (
-    <Stack>
-      <Stack.Screen
-        name="index"
-        options={{ headerShown: false }}
-      />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="incoming/[callId]" />
+      <Stack.Screen name="outgoing/[userId]" />
+      <Stack.Screen name="active/[callId]" />
     </Stack>
   );
 }

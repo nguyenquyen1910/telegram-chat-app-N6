@@ -1,1 +1,1 @@
-const useAuth = () => {};
+export { useAuth } from '@/context/AuthContext';

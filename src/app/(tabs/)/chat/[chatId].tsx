@@ -10,11 +10,10 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Message } from '@/types/chat';
-import { formatLastSeen } from '@/constants/chat';
+import { MOCK_CURRENT_USER, formatLastSeen } from '@/constants/chat';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
 import { useCall } from '@/hooks/useCall';
-import { useAuth } from '@/hooks/useAuth';
 import ChatHeader from '@/components/chat/ChatHeader';
 import MessageBubble from '@/components/chat/MessageBubble';
 import MessageInput from '@/components/chat/MessageInput';
@@ -22,19 +21,18 @@ import MessageInput from '@/components/chat/MessageInput';
 export default function ChatDetailScreen() {
   const router = useRouter();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
-  const { user: currentUser } = useAuth();
 
-  const { conversation, otherUser } = useConversation(chatId || null);
+  const { conversation, otherUser, currentUser } = useConversation(chatId || null);
   const { messages, loading, sending, sendTextMessage, sendImageMessage, loadMore, hasMore } =
     useMessages(chatId || null);
-  const { initiateCall } = useCall(currentUser?.uid || '');
+  const { initiateCall } = useCall(MOCK_CURRENT_USER.uid);
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const isOutgoing = useCallback(
-    (msg: Message) => msg.senderId === currentUser?.uid,
-    [currentUser]
+    (msg: Message) => msg.senderId === MOCK_CURRENT_USER.uid,
+    []
   );
 
   const handleReply = useCallback((msg: Message) => {
@@ -48,7 +46,7 @@ export default function ChatDetailScreen() {
             messageId: replyingTo.id,
             text: replyingTo.type === 'image' ? '📷 Ảnh' : replyingTo.text,
             senderName: isOutgoing(replyingTo)
-              ? currentUser?.displayName || 'You'
+              ? currentUser.displayName
               : otherUser?.displayName || 'User',
           }
         : undefined;
@@ -85,7 +83,7 @@ export default function ChatDetailScreen() {
         await sendImageMessage(asset.uri, fileName);
 
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
+          flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
       }
     } catch (error) {
@@ -94,15 +92,25 @@ export default function ChatDetailScreen() {
     }
   }, [sendImageMessage]);
 
-  const handleVoiceCall = useCallback(() => {
+  const handleVoiceCall = useCallback(async () => {
     if (!otherUser) return;
-    router.push(`/(tabs)/calls/outgoing/${otherUser.uid}?type=voice`);
-  }, [otherUser, router]);
+    try {
+      await initiateCall(otherUser.uid, 'voice');
+      router.push('/(tabs)/calls/active');
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không thể thực hiện cuộc gọi.');
+    }
+  }, [otherUser, initiateCall, router]);
 
-  const handleVideoCall = useCallback(() => {
+  const handleVideoCall = useCallback(async () => {
     if (!otherUser) return;
-    router.push(`/(tabs)/calls/outgoing/${otherUser.uid}?type=video`);
-  }, [otherUser, router]);
+    try {
+      await initiateCall(otherUser.uid, 'video');
+      router.push('/(tabs)/calls/active');
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không thể thực hiện cuộc gọi video.');
+    }
+  }, [otherUser, initiateCall, router]);
 
   const renderMessage = useCallback(
     ({ item }: { item: Message }) => (
@@ -132,6 +140,7 @@ export default function ChatDetailScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
+        {/* Header */}
         <ChatHeader
           userName={otherUser?.displayName || 'User'}
           userAvatar={otherUser?.avatarUrl || ''}
@@ -149,6 +158,7 @@ export default function ChatDetailScreen() {
           onVideoCallPress={handleVideoCall}
         />
 
+        {/* Messages */}
         <View style={styles.messagesArea}>
           <FlatList
             ref={flatListRef}
@@ -171,6 +181,7 @@ export default function ChatDetailScreen() {
           />
         </View>
 
+        {/* Input bar */}
         <MessageInput
           onSendText={handleSendText}
           onSendImage={handleSendImage}
@@ -178,7 +189,7 @@ export default function ChatDetailScreen() {
           replyingSenderName={
             replyingTo
               ? isOutgoing(replyingTo)
-                ? currentUser?.displayName || 'You'
+                ? currentUser.displayName
                 : otherUser?.displayName
               : undefined
           }

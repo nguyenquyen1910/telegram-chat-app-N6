@@ -12,6 +12,8 @@ export default function ChatHeader({
   isOnline,
   onBackPress,
   onProfilePress,
+  onVoiceCallPress,
+  onVideoCallPress
 }: ChatHeaderProps) {
   return (
     <View style={styles.container}>
@@ -39,18 +41,43 @@ export default function ChatHeader({
           </Text>
         </TouchableOpacity>
 
-        {/* Right: Avatar */}
-        <TouchableOpacity onPress={onProfilePress}>
-          {userAvatar ? (
-            <Image source={{ uri: userAvatar }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarLetter}>
-                {userName.charAt(0).toUpperCase()}
-              </Text>
+        {/* Right: Call buttons + Avatar */}
+        <View style={styles.rightContainer}>
+          {(onVoiceCallPress || onVideoCallPress) && (
+            <View style={styles.callButtons}>
+              {onVoiceCallPress && (
+                <TouchableOpacity
+                  style={styles.callButton}
+                  onPress={onVoiceCallPress}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="call" size={22} color="#037EE5" />
+                </TouchableOpacity>
+              )}
+              {onVideoCallPress && (
+                <TouchableOpacity
+                  style={styles.callButton}
+                  onPress={onVideoCallPress}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="videocam" size={22} color="#037EE5" />
+                </TouchableOpacity>
+              )}
             </View>
           )}
-        </TouchableOpacity>
+
+          <TouchableOpacity onPress={onProfilePress} style={styles.avatarButton}>
+            {userAvatar ? (
+              <Image source={{ uri: userAvatar }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarLetter}>
+                  {userName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -97,6 +124,21 @@ const styles = StyleSheet.create({
     color: '#787878',
     fontSize: 13,
     marginTop: 2,
+  },
+  rightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  callButtons: {
+    flexDirection: 'row',
+    marginRight: 8,
+  },
+  callButton: {
+    padding: 6,
+    marginLeft: 4,
+  },
+  avatarButton: {
+    padding: 2,
   },
   avatar: {
     width: 37,

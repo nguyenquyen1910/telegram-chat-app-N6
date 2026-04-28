@@ -61,3 +61,19 @@ export function subscribeToUserStatus(
     }
   });
 }
+
+/**
+ * Batch-fetch multiple user profiles efficiently in parallel.
+ * Uses in-memory cache so repeated IDs don't cause extra DB reads.
+ */
+export async function getUsersByIds(uids: string[]): Promise<Map<string, User>> {
+  const unique = [...new Set(uids.filter(Boolean))];
+  const results = await Promise.all(unique.map(uid => getUserById(uid)));
+
+  const map = new Map<string, User>();
+  unique.forEach((uid, i) => {
+    const user = results[i];
+    if (user) map.set(uid, user);
+  });
+  return map;
+}

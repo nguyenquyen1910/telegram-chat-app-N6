@@ -7,11 +7,11 @@ import {
   StatusBar,
   FlatList,
   Image,
-  TextInput,
+  TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { User } from '@/types/chat';
@@ -72,7 +72,7 @@ export default function ContactsScreen() {
     if (!currentUser) return;
     try {
       await initiateCall(userId, 'voice');
-      router.push({ pathname: '/(tabs)/calls/active/[callId]', params: { callId: '' } });
+      router.push('/(tabs)/calls/active');
     } catch (error) {
       console.error('Failed to initiate voice call:', error);
     }
@@ -82,7 +82,7 @@ export default function ContactsScreen() {
     if (!currentUser) return;
     try {
       await initiateCall(userId, 'video');
-      router.push({ pathname: '/(tabs)/calls/active/[callId]', params: { callId: '' } });
+      router.push('/(tabs)/calls/active');
     } catch (error) {
       console.error('Failed to initiate video call:', error);
     }
@@ -367,7 +367,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666666',
     marginTop: 16,
-    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
