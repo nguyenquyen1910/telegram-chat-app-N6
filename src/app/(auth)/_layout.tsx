@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ActivityIndicator, View } from 'react-native';
 
 export default function AuthLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isVerifying } = useAuth();
 
   // If still loading, show nothing (splash screen handles this)
   if (isLoading) {
@@ -14,8 +14,8 @@ export default function AuthLayout() {
     );
   }
 
-  // If already authenticated, redirect to chat immediately
-  if (isAuthenticated) {
+  // If already authenticated AND not in the middle of OTP verification, redirect to chat
+  if (isAuthenticated && !isVerifying) {
     return <Redirect href="/(tabs)/chat" />;
   }
 

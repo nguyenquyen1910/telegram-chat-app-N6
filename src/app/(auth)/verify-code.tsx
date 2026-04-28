@@ -12,8 +12,21 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { verifyEmailOTP, resendEmailOTP, loginUser } from '@/services/auth';
+import { useAuth } from '@/context/AuthContext';
 
 const CODE_LENGTH = 6;
+
+// Mask email for privacy: "thanhlucky150204@gmail.com" → "th***04@gmail.com"
+const maskEmail = (email: string): string => {
+    if (!email || !email.includes('@')) return email;
+    const [localPart, domain] = email.split('@');
+    if (localPart.length <= 3) {
+        return `${localPart[0]}***@${domain}`;
+    }
+    const visibleStart = localPart.slice(0, 2);
+    const visibleEnd = localPart.slice(-2);
+    return `${visibleStart}***${visibleEnd}@${domain}`;
+};
 
 export default function VerifyCodeScreen() {
     const { phoneNumber, email, mode } = useLocalSearchParams<{
@@ -22,12 +35,14 @@ export default function VerifyCodeScreen() {
         mode: 'login' | 'register';
     }>();
     const router = useRouter();
+    const { setIsVerifying } = useAuth();
     const [code, setCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [countdown, setCountdown] = useState(60);
     const inputRef = useRef<TextInput>(null);
 
     const isLoginMode = mode === 'login';
+    const maskedEmail = maskEmail(email);
 
     useEffect(() => {
         if (countdown <= 0) return;
@@ -54,6 +69,8 @@ export default function VerifyCodeScreen() {
             await verifyEmailOTP(code);
 
             if (isLoginMode) {
+                // Clear verifying flag before navigating away
+                setIsVerifying(false);
                 await loginUser(phoneNumber);
                 router.replace('/(tabs)/chat');
             } else {
@@ -87,7 +104,10 @@ export default function VerifyCodeScreen() {
                 {/* Back button */}
                 <TouchableOpacity
                     style={styles.backButton}
-                    onPress={() => router.back()}
+                    onPress={() => {
+                        setIsVerifying(false);
+                        router.back();
+                    }}
                 >
                     <Ionicons name="arrow-back" size={24} color="#007AFF" />
                 </TouchableOpacity>
@@ -104,7 +124,7 @@ export default function VerifyCodeScreen() {
                 </Text>
                 <Text style={styles.subtitle}>
                     We've sent a verification code to{'\n'}
-                    <Text style={styles.emailText}>{email}</Text>
+                    <Text style={styles.emailText}>{maskedEmail}</Text>
                 </Text>
 
                 {/* Phone info */}

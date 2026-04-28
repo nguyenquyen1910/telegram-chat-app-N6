@@ -14,10 +14,12 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { sendEmailOTP } from '@/services/auth';
+import { useAuth } from '@/context/AuthContext';
 
 export default function EnterEmailScreen() {
   const { phoneNumber } = useLocalSearchParams<{ phoneNumber: string }>();
   const router = useRouter();
+  const { setIsVerifying } = useAuth();
   const [email, setEmail] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -32,6 +34,7 @@ export default function EnterEmailScreen() {
     setIsSending(true);
     try {
       await sendEmailOTP(email, phoneNumber);
+      setIsVerifying(true);
       router.push({
         pathname: '/(auth)/verify-code',
         params: { phoneNumber, email, mode: 'register' },

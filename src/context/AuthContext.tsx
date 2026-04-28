@@ -7,6 +7,8 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isVerifying: boolean;
+  setIsVerifying: (v: boolean) => void;
   logout: () => Promise<void>;
 }
 
@@ -14,12 +16,15 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
+  isVerifying: false,
+  setIsVerifying: () => {},
   logout: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
@@ -70,6 +75,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isLoading,
         isAuthenticated: !!user,
+        isVerifying,
+        setIsVerifying,
         logout,
       }}
     >

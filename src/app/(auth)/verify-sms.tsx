@@ -14,6 +14,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { verifySmsOTP, registerUser } from '@/services/auth';
+import { useAuth } from '@/context/AuthContext';
 
 const CODE_LENGTH = 6;
 
@@ -23,6 +24,7 @@ export default function VerifySmsScreen() {
         email: string;
     }>();
     const router = useRouter();
+    const { setIsVerifying } = useAuth();
     const [code, setCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
@@ -74,6 +76,7 @@ export default function VerifySmsScreen() {
 
     const handleGoToChat = () => {
         setShowSuccess(false);
+        setIsVerifying(false);
         router.replace('/(tabs)/chat');
     };
 
@@ -82,7 +85,10 @@ export default function VerifySmsScreen() {
             <View style={styles.content}>
                 <TouchableOpacity
                     style={styles.backButton}
-                    onPress={() => router.back()}
+                    onPress={() => {
+                        setIsVerifying(false);
+                        router.back();
+                    }}
                 >
                     <Ionicons name="arrow-back" size={24} color="#007AFF" />
                 </TouchableOpacity>
