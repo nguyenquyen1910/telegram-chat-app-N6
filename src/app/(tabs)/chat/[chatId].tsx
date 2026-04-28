@@ -31,14 +31,21 @@ import ChatSearchBar from '@/components/chat/ChatSearchBar';
 import AttachmentPicker from '@/components/chat/AttachmentPicker';
 import MediaViewer from '@/components/chat/MediaViewer';
 import MessageActionMenu from '@/components/chat/MessageActionMenu';
+import DateSeparator from '@/components/chat/DateSeparator';
+import PromptModal from '@/components/chat/PromptModal';
+import { getUserByPhone } from '@/services/userService';
+import { addMemberToGroup, leaveGroupConversation, updateGroupAvatar, updateGroupName } from '@/services/chatService';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadImage } from '@/services/mediaService';
 
 // Separator key cho "Tin nhắn chưa đọc"
 const UNREAD_SEPARATOR_ID = '__unread_separator__';
 
 interface ListItem {
   id: string;
-  type: 'message' | 'unread-separator';
+  type: 'message' | 'unread-separator' | 'date-separator';
   message?: Message;
+  dateStr?: string;
 }
 
 export default function ChatDetailScreen() {
@@ -69,6 +76,10 @@ export default function ChatDetailScreen() {
   const [searchResultIndex, setSearchResultIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrolledToInitial = useRef(false);
+
+  // Group features state
+  const [showAddMemberPrompt, setShowAddMemberPrompt] = useState(false);
+  const [showRenameGroupPrompt, setShowRenameGroupPrompt] = useState(false);
 
   const { currentWallpaper, setWallpaper } = useChatWallpaper(chatId || null);
 
@@ -105,6 +116,94 @@ export default function ChatDetailScreen() {
     if (!chatId || !currentUid) return;
     await toggleMuteConversation(chatId, currentUid, !isMuted);
   }, [chatId, currentUid, isMuted]);
+
+  // Group handlers
+  const handleAddMemberSubmit = useCallback(async (phone: string) => {
+    if (!chatId) return;
+    try {
+      const userToAdd = await getUserByPhone(phone);
+      if (!userToAdd) {
+        Alert.alert('Lỗi', 'Không tìm thấy người dùng với số điện thoại này.');
+        return;
+      }
+      if (conversation?.participants.includes(userToAdd.uid)) {
+        Alert.alert('Thông báo', 'Người dùng này đã ở trong nhóm.');
+        return;
+      }
+      await addMemberToGroup(chatId, userToAdd.uid);
+      Alert.alert('Thành công', 'Đã thêm thành viên vào nhóm.');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi thêm thành viên.');
+    }
+  }, [chatId, conversation]);
+
+  const handleChangeGroupAvatar = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Quyền truy cập bị từ chối', 'Ứng dụng cần quyền truy cập thư viện ảnh.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0].uri) {
+        const uploadRes = await uploadImage(result.assets[0].uri);
+        await updateGroupAvatar(chatId, uploadRes.url);
+        Alert.alert('Thành công', 'Đã cập nhật ảnh nhóm.');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi đổi ảnh nhóm.');
+    }
+  }, [chatId]);
+
+  const handleLeaveGroup = useCallback(() => {
+    if (!chatId || !currentUid) return;
+    Alert.alert(
+      'Rời nhóm',
+      'Bạn có chắc chắn muốn rời khỏi nhóm này không?',
+      [
+        { text: 'Huỷ', style: 'cancel' },
+        { 
+          text: 'Rời nhóm', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await leaveGroupConversation(chatId, currentUid);
+              router.back();
+            } catch (error) {
+              console.error(error);
+              Alert.alert('Lỗi', 'Có lỗi xảy ra khi rời nhóm.');
+            }
+          }
+        }
+      ]
+    );
+  }, [chatId, currentUid, router]);
+
+  const handleRenameGroupSubmit = useCallback(async (newName: string) => {
+    if (!chatId) return;
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      Alert.alert('Lỗi', 'Tên nhóm không được để trống.');
+      return;
+    }
+    try {
+      await updateGroupName(chatId, trimmed);
+      Alert.alert('Thành công', 'Đã đổi tên nhóm.');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi đổi tên nhóm.');
+    }
+  }, [chatId]);
 
   // Lưu lastReadBy[currentUid] lần đầu khi mở chat (để biết tin nhắn nào chưa đọc)
   useEffect(() => {
@@ -156,16 +255,33 @@ export default function ChatDetailScreen() {
     [currentUid, otherUid, lastReadBy]
   );
 
-  // Build danh sách items: messages + unread separator
+  // Build danh sách items: messages + unread separator + date separator
   const listItems: ListItem[] = useMemo(() => {
     if (messages.length === 0) return [];
 
     const items: ListItem[] = [];
     let separatorInserted = false;
     const readMs = initialLastRead?.toMillis?.() || 0;
+    let lastDateStr = '';
 
     for (const msg of messages) {
-      // Chèn separator trước tin nhắn chưa đọc đầu tiên từ người khác
+      // 1. Chèn date separator nếu khác ngày
+      let msgDateStr = '';
+      if (msg.createdAt) {
+        const d = msg.createdAt.toDate();
+        msgDateStr = `${d.getDate()} tháng ${d.getMonth() + 1}`;
+      }
+
+      if (msgDateStr && msgDateStr !== lastDateStr) {
+        items.push({
+          id: `date_${msgDateStr}_${msg.id}`,
+          type: 'date-separator',
+          dateStr: msgDateStr,
+        });
+        lastDateStr = msgDateStr;
+      }
+
+      // 2. Chèn separator trước tin nhắn chưa đọc đầu tiên từ người khác
       if (
         !separatorInserted &&
         msg.senderId !== currentUid &&
@@ -179,6 +295,7 @@ export default function ChatDetailScreen() {
         }
       }
 
+      // 3. Chèn tin nhắn
       items.push({
         id: msg.id,
         type: 'message',
@@ -355,6 +472,10 @@ export default function ChatDetailScreen() {
         );
       }
 
+      if (item.type === 'date-separator' && item.dateStr) {
+        return <DateSeparator date={item.dateStr} />;
+      }
+
       if (!item.message) return null;
 
       return (
@@ -414,17 +535,34 @@ export default function ChatDetailScreen() {
               setSearchResultIndex(0);
             }}
           />
+        ) : conversation?.type === 'group' ? (
+          <ChatHeader
+            userName={conversation.groupName || 'Nhóm'}
+            userAvatar={conversation.groupAvatar || ''}
+            lastSeen={`${conversation.participants.length} thành viên`}
+            isOnline={false}
+            isGroup={true}
+            onBackPress={() => router.back()}
+            onProfilePress={() =>
+              router.push({
+                pathname: '/(tabs)/chat/group-profile',
+                params: { conversationId: chatId || '' },
+              })
+            }
+            onMenuPress={() => setShowOptionsMenu(true)}
+          />
         ) : (
           <ChatHeader
             userName={otherUser?.displayName || 'User'}
             userAvatar={otherUser?.avatarUrl || ''}
             lastSeen={formatLastSeen(otherUser?.lastSeen || null, otherUser?.isOnline || false)}
             isOnline={otherUser?.isOnline || false}
+            isGroup={false}
             onBackPress={() => router.back()}
             onProfilePress={() =>
               router.push({
                 pathname: '/(tabs)/chat/user-profile',
-                params: { userId: otherUser?.uid || '' },
+                params: { userId: otherUser?.uid || '', conversationId: chatId || '' },
               })
             }
             onCallPress={() => Alert.alert('Cuộc gọi', 'Tính năng đang phát triển')}
@@ -509,6 +647,11 @@ export default function ChatDetailScreen() {
         onAddContact={() => {
           Alert.alert('Thêm vào danh bạ', 'Tính năng đang phát triển');
         }}
+        conversationType={conversation?.type || 'private'}
+        onAddMember={() => setShowAddMemberPrompt(true)}
+        onChangeGroupAvatar={handleChangeGroupAvatar}
+        onRenameGroup={() => setShowRenameGroupPrompt(true)}
+        onLeaveGroup={handleLeaveGroup}
       />
 
       <WallpaperPicker
@@ -550,6 +693,25 @@ export default function ChatDetailScreen() {
         onDelete={handleDelete}
         onRevoke={handleRevoke}
         onReaction={handleReaction}
+      />
+
+      <PromptModal
+        visible={showAddMemberPrompt}
+        title="Thêm thành viên"
+        description="Nhập số điện thoại của người dùng bạn muốn thêm vào nhóm."
+        placeholder="Nhập số điện thoại..."
+        keyboardType="phone-pad"
+        onClose={() => setShowAddMemberPrompt(false)}
+        onSubmit={handleAddMemberSubmit}
+      />
+
+      <PromptModal
+        visible={showRenameGroupPrompt}
+        title="Đổi tên nhóm"
+        description="Nhập tên mới cho nhóm."
+        placeholder="Tên nhóm mới..."
+        onClose={() => setShowRenameGroupPrompt(false)}
+        onSubmit={handleRenameGroupSubmit}
       />
     </View>
   );

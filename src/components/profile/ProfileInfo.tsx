@@ -34,26 +34,26 @@ export default function ProfileInfo({ phoneNumber, bio, username }: ProfileInfoP
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#17212B',
-    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    marginTop: 0,
   },
   infoRow: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#0E1621',
+    borderBottomColor: '#F0F0F0',
   },
   infoValue: {
-    color: '#FFFFFF',
+    color: '#010101',
     fontSize: 16,
   },
   infoLabel: {
-    color: '#8E9BAA',
+    color: '#8E8E93',
     fontSize: 13,
     marginTop: 2,
   },
   infoLink: {
-    color: '#62AAEF',
+    color: '#4CAF50',
     fontSize: 16,
   },
 });

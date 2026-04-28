@@ -22,6 +22,13 @@ export default function ChatLayout() {
           presentation: 'card',
         }}
       />
+      <Stack.Screen
+        name="group-profile"
+        options={{
+          headerShown: false,
+          presentation: 'card',
+        }}
+      />
     </Stack>
   );
 }
