@@ -27,6 +27,8 @@ export interface Conversation {
   updatedAt: Timestamp;
   type: 'private' | 'group';
   lastReadBy?: { [uid: string]: Timestamp };
+  mutedBy?: { [uid: string]: boolean };
+  wallpaperId?: string;
   groupName?: string;
   groupAvatar?: string;
 }
@@ -55,6 +57,11 @@ export interface Message {
   voiceDuration?: number;
   status: MessageStatus;
   createdAt: Timestamp;
+  // Message actions
+  reactions?: { [emoji: string]: string[] };
+  isRevoked?: boolean;
+  deletedFor?: string[];
+  isEdited?: boolean;
 }
 
 // ==================== Media Upload ====================
@@ -80,19 +87,25 @@ export interface MessageBubbleProps {
   message: Message;
   isOutgoing: boolean;
   senderName?: string;
-  onReply?: (message: Message) => void;
+  isHighlighted?: boolean;
+  currentUid?: string;
+  onLongPress?: (message: Message) => void;
   onImagePress?: (imageUrl: string) => void;
+  onFilePress?: (fileUrl: string, fileName: string) => void;
 }
 
 export interface MessageInputProps {
   onSendText: (text: string) => void;
-  onPickImage: () => void;
+  onAttach: () => void;
   onSendImage: (uri: string, fileName: string, caption: string) => void;
   pendingImage: { uri: string; fileName: string } | null;
   onCancelImage: () => void;
   replyingTo: Message | null;
   replyingSenderName?: string;
   onCancelReply: () => void;
+  editingMessage: Message | null;
+  onCancelEdit: () => void;
+  onSaveEdit: (messageId: string, newText: string) => void;
 }
 
 export interface ImageMessageProps {

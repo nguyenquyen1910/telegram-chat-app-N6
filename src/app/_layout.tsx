@@ -7,6 +7,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider } from '@/context/AuthContext';
 import { ChatListProvider } from '@/context/ChatListContext';
+import { NotificationProvider, useNotificationListener } from '@/hooks/useNotificationListener';
+
+function NotificationSetup() {
+  useNotificationListener();
+  return null;
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -14,6 +20,8 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <ChatListProvider>
+        <NotificationProvider>
+        <NotificationSetup />
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <AnimatedSplashOverlay />
           <Stack screenOptions={{ headerShown: false }}>
@@ -21,6 +29,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           </Stack>
         </ThemeProvider>
+        </NotificationProvider>
         </ChatListProvider>
       </AuthProvider>
     </GestureHandlerRootView>

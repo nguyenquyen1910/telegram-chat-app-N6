@@ -16,6 +16,9 @@ import {
   DocumentSnapshot,
   QueryDocumentSnapshot,
   updateDoc,
+  arrayUnion,
+  arrayRemove,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Message, Conversation, MessageType, ReplyTo } from '@/types/chat';
@@ -199,7 +202,8 @@ export async function getMessages(
 export function subscribeToNewMessages(
   conversationId: string,
   afterTimestamp: Timestamp,
-  callback: (messages: Message[]) => void
+  callback: (messages: Message[]) => void,
+  onModified?: (messages: Message[]) => void
 ) {
   const firestore = getDb();
   const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
@@ -216,6 +220,50 @@ export function subscribeToNewMessages(
 
     if (newMessages.length > 0) {
       callback(newMessages);
+    }
+
+    // Handle modified messages (reactions, revoke, edit, delete)
+    if (onModified) {
+      const modifiedMessages: Message[] = snapshot.docChanges()
+        .filter((change) => change.type === 'modified')
+        .map((change) => ({ id: change.doc.id, ...change.doc.data() } as Message));
+
+      if (modifiedMessages.length > 0) {
+        onModified(modifiedMessages);
+      }
+    }
+  });
+}
+
+/**
+ * Subscribe to ALL message changes (modified/removed) in a conversation.
+ * Captures reactions, revoke, edit, delete on any message regardless of age.
+ */
+export function subscribeToMessageChanges(
+  conversationId: string,
+  onModified: (messages: Message[]) => void,
+  onRemoved?: (messageIds: string[]) => void
+) {
+  const firestore = getDb();
+  const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
+  const q = query(messagesRef, orderBy('createdAt', 'asc'));
+
+  return onSnapshot(q, (snapshot) => {
+    const modified: Message[] = snapshot.docChanges()
+      .filter((change) => change.type === 'modified')
+      .map((change) => ({ id: change.doc.id, ...change.doc.data() } as Message));
+
+    if (modified.length > 0) {
+      onModified(modified);
+    }
+
+    if (onRemoved) {
+      const removed = snapshot.docChanges()
+        .filter((change) => change.type === 'removed')
+        .map((change) => change.doc.id);
+      if (removed.length > 0) {
+        onRemoved(removed);
+      }
     }
   });
 }
@@ -314,4 +362,129 @@ export async function markConversationAsRead(
   } catch (error) {
     console.warn('[ChatService] markConversationAsRead error:', error);
   }
+}
+
+// ==================== Mute ====================
+
+export async function toggleMuteConversation(
+  conversationId: string,
+  uid: string,
+  muted: boolean
+): Promise<void> {
+  try {
+    const firestore = getDb();
+    const convRef = doc(firestore, 'conversations', conversationId);
+    await updateDoc(convRef, {
+      [`mutedBy.${uid}`]: muted,
+    });
+  } catch (error) {
+    console.warn('[ChatService] toggleMuteConversation error:', error);
+  }
+}
+
+// ==================== Message Actions ====================
+
+/**
+ * Thu hồi tin nhắn (cả 2 phía)
+ * Không giới hạn thời gian
+ */
+export async function revokeMessage(
+  conversationId: string,
+  messageId: string
+): Promise<void> {
+  const firestore = getDb();
+  const msgRef = doc(firestore, 'conversations', conversationId, 'messages', messageId);
+  await updateDoc(msgRef, {
+    isRevoked: true,
+    text: '',
+    imageUrl: deleteField(),
+    fileName: deleteField(),
+    fileSize: deleteField(),
+    reactions: deleteField(),
+  });
+
+  // Cập nhật lastMessage nếu tin nhắn thu hồi là tin mới nhất
+  const convRef = doc(firestore, 'conversations', conversationId);
+  const convSnap = await getDoc(convRef);
+  if (convSnap.exists()) {
+    const conv = convSnap.data();
+    // Cập nhật lastMessage thành "Tin nhắn đã thu hồi"
+    await updateDoc(convRef, {
+      lastMessage: {
+        ...conv.lastMessage,
+        text: 'Tin nhắn đã thu hồi',
+        type: 'text',
+      },
+    });
+  }
+}
+
+/**
+ * Xoá tin nhắn 1 phía (chỉ cho user hiện tại)
+ */
+export async function deleteMessageForMe(
+  conversationId: string,
+  messageId: string,
+  uid: string
+): Promise<void> {
+  const firestore = getDb();
+  const msgRef = doc(firestore, 'conversations', conversationId, 'messages', messageId);
+  await updateDoc(msgRef, {
+    deletedFor: arrayUnion(uid),
+  });
+}
+
+/**
+ * Toggle emoji reaction trên tin nhắn
+ */
+export async function toggleReaction(
+  conversationId: string,
+  messageId: string,
+  uid: string,
+  emoji: string
+): Promise<void> {
+  const firestore = getDb();
+  const msgRef = doc(firestore, 'conversations', conversationId, 'messages', messageId);
+  const msgSnap = await getDoc(msgRef);
+
+  if (!msgSnap.exists()) return;
+
+  const data = msgSnap.data();
+  const reactions: { [key: string]: string[] } = data.reactions || {};
+  const currentList = reactions[emoji] || [];
+
+  if (currentList.includes(uid)) {
+    // Bỏ reaction
+    reactions[emoji] = currentList.filter((id) => id !== uid);
+    if (reactions[emoji].length === 0) {
+      delete reactions[emoji];
+    }
+  } else {
+    // Thêm reaction (xoá reaction cũ của user nếu có)
+    for (const key of Object.keys(reactions)) {
+      reactions[key] = reactions[key].filter((id) => id !== uid);
+      if (reactions[key].length === 0) {
+        delete reactions[key];
+      }
+    }
+    reactions[emoji] = [...(reactions[emoji] || []), uid];
+  }
+
+  await updateDoc(msgRef, { reactions });
+}
+
+/**
+ * Sửa tin nhắn (chỉ text)
+ */
+export async function editMessage(
+  conversationId: string,
+  messageId: string,
+  newText: string
+): Promise<void> {
+  const firestore = getDb();
+  const msgRef = doc(firestore, 'conversations', conversationId, 'messages', messageId);
+  await updateDoc(msgRef, {
+    text: newText,
+    isEdited: true,
+  });
 }
