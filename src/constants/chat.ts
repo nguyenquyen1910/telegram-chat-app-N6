@@ -221,3 +221,36 @@ export function formatLastSeen(timestamp: Timestamp | null, isOnline: boolean): 
   const date = timestamp.toDate();
   return `truy cập ${date.toLocaleDateString('vi-VN')}`;
 }
+
+export function formatChatListTime(timestamp: Timestamp | null): string {
+  if (!timestamp || !timestamp.toDate) return '';
+  try {
+    const date = timestamp.toDate();
+    const now = new Date();
+  
+    // Today
+    if (date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
+      return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    }
+  
+    // Yesterday
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear()) {
+      return 'Hôm qua';
+    }
+  
+    // Within last 7 days
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    if (diffDays < 7) {
+      const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+      return days[date.getDay()];
+    }
+  
+    // Older
+    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(2)}`;
+  } catch {
+    return '';
+  }
+}
