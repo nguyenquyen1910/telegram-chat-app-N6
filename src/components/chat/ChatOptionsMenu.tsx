@@ -14,14 +14,31 @@ interface ChatOptionsMenuProps {
   visible: boolean;
   onClose: () => void;
   onChangeWallpaper: () => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
+  onSearch?: () => void;
+  onAddContact?: () => void;
 }
 
 export default function ChatOptionsMenu({
   visible,
   onClose,
   onChangeWallpaper,
+  isMuted = false,
+  onToggleMute,
+  onSearch,
+  onAddContact,
 }: ChatOptionsMenuProps) {
   const menuItems: ChatOptionsMenuItem[] = [
+    {
+      id: 'add_contact',
+      icon: 'person-add-outline',
+      label: 'Thêm vào danh bạ',
+      onPress: () => {
+        onClose();
+        setTimeout(() => onAddContact?.(), 300);
+      },
+    },
     {
       id: 'wallpaper',
       icon: 'image-outline',
@@ -33,10 +50,11 @@ export default function ChatOptionsMenu({
     },
     {
       id: 'mute',
-      icon: 'notifications-off-outline',
-      label: 'Tắt thông báo',
+      icon: isMuted ? 'notifications-outline' : 'notifications-off-outline',
+      label: isMuted ? 'Bật thông báo' : 'Tắt thông báo',
       onPress: () => {
         onClose();
+        onToggleMute?.();
       },
     },
     {
@@ -45,6 +63,7 @@ export default function ChatOptionsMenu({
       label: 'Tìm tin nhắn',
       onPress: () => {
         onClose();
+        setTimeout(() => onSearch?.(), 300);
       },
     },
     {

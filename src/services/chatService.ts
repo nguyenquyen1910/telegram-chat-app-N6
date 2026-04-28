@@ -315,3 +315,21 @@ export async function markConversationAsRead(
     console.warn('[ChatService] markConversationAsRead error:', error);
   }
 }
+
+// ==================== Mute ====================
+
+export async function toggleMuteConversation(
+  conversationId: string,
+  uid: string,
+  muted: boolean
+): Promise<void> {
+  try {
+    const firestore = getDb();
+    const convRef = doc(firestore, 'conversations', conversationId);
+    await updateDoc(convRef, {
+      [`mutedBy.${uid}`]: muted,
+    });
+  } catch (error) {
+    console.warn('[ChatService] toggleMuteConversation error:', error);
+  }
+}

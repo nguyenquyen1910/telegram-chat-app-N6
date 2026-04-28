@@ -10,6 +10,7 @@ export default function MessageBubble({
   message,
   isOutgoing,
   senderName,
+  isHighlighted,
   onReply,
   onImagePress,
 }: MessageBubbleProps) {
@@ -52,6 +53,7 @@ export default function MessageBubble({
           styles.bubble,
           isOutgoing ? styles.outgoingBubble : styles.incomingBubble,
           hasImage && styles.imageBubble,
+          isHighlighted && styles.highlightedBubble,
         ]}
       >
         {/* Reply preview */}
@@ -213,5 +215,11 @@ const styles = StyleSheet.create({
   },
   timeLight: {
     color: '#FFFFFF',
+  },
+  // ======= Search Highlight =======
+  highlightedBubble: {
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    backgroundColor: '#FFFDE7',
   },
 });

@@ -18,12 +18,14 @@ import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
 import { useChatWallpaper } from '@/hooks/useChatWallpaper';
-import { markConversationAsRead } from '@/services/chatService';
+import { markConversationAsRead, toggleMuteConversation } from '@/services/chatService';
+import { setCurrentOpenChat } from '@/hooks/useNotificationListener';
 import ChatHeader from '@/components/chat/ChatHeader';
 import MessageBubble from '@/components/chat/MessageBubble';
 import MessageInput from '@/components/chat/MessageInput';
 import WallpaperPicker from '@/components/chat/WallpaperPicker';
 import ChatOptionsMenu from '@/components/chat/ChatOptionsMenu';
+import ChatSearchBar from '@/components/chat/ChatSearchBar';
 
 // Separator key cho "Tin nhắn chưa đọc"
 const UNREAD_SEPARATOR_ID = '__unread_separator__';
@@ -50,10 +52,31 @@ export default function ChatDetailScreen() {
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const [initialLastRead, setInitialLastRead] = useState<Timestamp | null>(null);
   const [hasMarkedRead, setHasMarkedRead] = useState(false);
+  // Search state
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResultIndex, setSearchResultIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrolledToInitial = useRef(false);
 
   const { currentWallpaper, setWallpaper } = useChatWallpaper(chatId || null);
+
+  // Track current chat để notification biết bỏ qua
+  useEffect(() => {
+    setCurrentOpenChat(chatId || null);
+    return () => setCurrentOpenChat(null);
+  }, [chatId]);
+
+  // Mute state
+  const isMuted = useMemo(() => {
+    if (!conversation || !currentUid) return false;
+    return conversation.mutedBy?.[currentUid] || false;
+  }, [conversation, currentUid]);
+
+  const handleToggleMute = useCallback(async () => {
+    if (!chatId || !currentUid) return;
+    await toggleMuteConversation(chatId, currentUid, !isMuted);
+  }, [chatId, currentUid, isMuted]);
 
   // Lưu lastReadBy[currentUid] lần đầu khi mở chat (để biết tin nhắn nào chưa đọc)
   useEffect(() => {
@@ -227,6 +250,51 @@ export default function ChatDetailScreen() {
     [sendImageMessage]
   );
 
+  // Search logic
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return messages
+      .map((msg, idx) => ({ msg, idx }))
+      .filter(({ msg }) => msg.text?.toLowerCase().includes(q));
+  }, [messages, searchQuery]);
+
+  const highlightedMessageId = useMemo(() => {
+    if (searchResults.length === 0) return null;
+    const safeIndex = Math.min(searchResultIndex, searchResults.length - 1);
+    return searchResults[safeIndex]?.msg.id || null;
+  }, [searchResults, searchResultIndex]);
+
+  // Scroll đến kết quả search trong inverted list
+  useEffect(() => {
+    if (!highlightedMessageId || invertedItems.length === 0) return;
+    const idx = invertedItems.findIndex(
+      (item) => item.id === highlightedMessageId
+    );
+    if (idx >= 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: idx,
+          animated: true,
+          viewPosition: 0.5,
+        });
+      }, 150);
+    }
+  }, [highlightedMessageId, invertedItems]);
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    setSearchResultIndex(0);
+  }, []);
+
+  const handleSearchNext = useCallback(() => {
+    setSearchResultIndex((prev) => Math.min(prev + 1, searchResults.length - 1));
+  }, [searchResults.length]);
+
+  const handleSearchPrev = useCallback(() => {
+    setSearchResultIndex((prev) => Math.max(prev - 1, 0));
+  }, []);
+
   const renderItem = useCallback(
     ({ item }: { item: ListItem }) => {
       if (item.type === 'unread-separator') {
@@ -246,12 +314,13 @@ export default function ChatDetailScreen() {
           message={item.message}
           isOutgoing={isOutgoing(item.message)}
           senderName={otherUser?.displayName}
+          isHighlighted={item.id === highlightedMessageId}
           onReply={handleReply}
           onImagePress={(url) => console.log('Open image:', url)}
         />
       );
     },
-    [isOutgoing, otherUser, handleReply]
+    [isOutgoing, otherUser, handleReply, highlightedMessageId]
   );
 
   const wallpaperBg = currentWallpaper.colors[0];
@@ -271,21 +340,36 @@ export default function ChatDetailScreen() {
         behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <ChatHeader
-          userName={otherUser?.displayName || 'User'}
-          userAvatar={otherUser?.avatarUrl || ''}
-          lastSeen={formatLastSeen(otherUser?.lastSeen || null, otherUser?.isOnline || false)}
-          isOnline={otherUser?.isOnline || false}
-          onBackPress={() => router.back()}
-          onProfilePress={() =>
-            router.push({
-              pathname: '/(tabs)/chat/user-profile',
-              params: { userId: otherUser?.uid || '' },
-            })
-          }
-          onCallPress={() => Alert.alert('Cuộc gọi', 'Tính năng đang phát triển')}
-          onMenuPress={() => setShowOptionsMenu(true)}
-        />
+        {showSearch ? (
+          <ChatSearchBar
+            totalResults={searchResults.length}
+            currentIndex={searchResultIndex}
+            onSearch={handleSearch}
+            onNext={handleSearchNext}
+            onPrev={handleSearchPrev}
+            onClose={() => {
+              setShowSearch(false);
+              setSearchQuery('');
+              setSearchResultIndex(0);
+            }}
+          />
+        ) : (
+          <ChatHeader
+            userName={otherUser?.displayName || 'User'}
+            userAvatar={otherUser?.avatarUrl || ''}
+            lastSeen={formatLastSeen(otherUser?.lastSeen || null, otherUser?.isOnline || false)}
+            isOnline={otherUser?.isOnline || false}
+            onBackPress={() => router.back()}
+            onProfilePress={() =>
+              router.push({
+                pathname: '/(tabs)/chat/user-profile',
+                params: { userId: otherUser?.uid || '' },
+              })
+            }
+            onCallPress={() => Alert.alert('Cuộc gọi', 'Tính năng đang phát triển')}
+            onMenuPress={() => setShowOptionsMenu(true)}
+          />
+        )}
 
         <View style={[styles.messagesArea, { backgroundColor: wallpaperBg }]}>
           {currentWallpaper.type === 'gradient' && currentWallpaper.colors.length >= 2 && (
@@ -352,6 +436,12 @@ export default function ChatDetailScreen() {
         visible={showOptionsMenu}
         onClose={() => setShowOptionsMenu(false)}
         onChangeWallpaper={() => setShowWallpaperPicker(true)}
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
+        onSearch={() => setShowSearch(true)}
+        onAddContact={() => {
+          Alert.alert('Thêm vào danh bạ', 'Tính năng đang phát triển');
+        }}
       />
 
       <WallpaperPicker

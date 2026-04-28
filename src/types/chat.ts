@@ -27,6 +27,8 @@ export interface Conversation {
   updatedAt: Timestamp;
   type: 'private' | 'group';
   lastReadBy?: { [uid: string]: Timestamp };
+  mutedBy?: { [uid: string]: boolean };
+  wallpaperId?: string;
   groupName?: string;
   groupAvatar?: string;
 }
@@ -80,6 +82,7 @@ export interface MessageBubbleProps {
   message: Message;
   isOutgoing: boolean;
   senderName?: string;
+  isHighlighted?: boolean;
   onReply?: (message: Message) => void;
   onImagePress?: (imageUrl: string) => void;
 }
