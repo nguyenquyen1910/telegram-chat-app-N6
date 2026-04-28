@@ -21,10 +21,10 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   pill: {
-    backgroundColor: 'rgba(43,120,205,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 14,
   },
   text: {
     color: '#FFFFFF',

@@ -3,40 +3,10 @@ import { View, Text, TouchableOpacity, Image, StyleSheet, Dimensions } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { MessageBubbleProps } from '@/types/chat';
 import { formatMessageTime } from '@/constants/chat';
-import { formatFileSize } from '@/services/mediaService';
+import { formatFileSize, getFileIcon } from '@/services/mediaService';
 import ReplyPreview from './ReplyPreview';
 import VoiceMessage from './VoiceMessage';
 
-// Helper: icon và màu theo loại file
-function getFileIcon(fileName: string): { icon: string; color: string; bg: string } {
-  const ext = (fileName.split('.').pop() || '').toLowerCase();
-  switch (ext) {
-    case 'pdf':
-      return { icon: 'document-text', color: '#E53935', bg: '#FFEBEE' };
-    case 'doc': case 'docx':
-      return { icon: 'document-text', color: '#1565C0', bg: '#E3F2FD' };
-    case 'xls': case 'xlsx': case 'csv':
-      return { icon: 'grid-outline', color: '#2E7D32', bg: '#E8F5E9' };
-    case 'ppt': case 'pptx':
-      return { icon: 'easel-outline', color: '#E65100', bg: '#FFF3E0' };
-    case 'zip': case 'rar': case '7z': case 'tar': case 'gz':
-      return { icon: 'file-tray-stacked', color: '#F9A825', bg: '#FFFDE7' };
-    case 'mp3': case 'wav': case 'aac': case 'flac':
-      return { icon: 'musical-notes', color: '#8E24AA', bg: '#F3E5F5' };
-    case 'mp4': case 'mov': case 'avi': case 'mkv':
-      return { icon: 'videocam', color: '#D81B60', bg: '#FCE4EC' };
-    case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp':
-      return { icon: 'image', color: '#00897B', bg: '#E0F2F1' };
-    case 'txt': case 'log':
-      return { icon: 'document-outline', color: '#546E7A', bg: '#ECEFF1' };
-    case 'json': case 'xml': case 'js': case 'ts': case 'html': case 'css':
-      return { icon: 'code-slash', color: '#3949AB', bg: '#E8EAF6' };
-    case 'apk':
-      return { icon: 'logo-android', color: '#43A047', bg: '#E8F5E9' };
-    default:
-      return { icon: 'document-attach', color: '#50A8EB', bg: '#E3F2FD' };
-  }
-}
 
 export default function MessageBubble({
   message,
@@ -125,7 +95,7 @@ export default function MessageBubble({
           {/* Revoked message */}
           {message.isRevoked && (
             <View style={{ paddingVertical: 2 }}>
-              <Text style={styles.revokedText}>🚫 Tin nhắn đã thu hồi</Text>
+              <Text style={styles.revokedText}>Tin nhắn đã thu hồi</Text>
               {renderTimeStatus()}
             </View>
           )}
@@ -143,6 +113,8 @@ export default function MessageBubble({
           {hasImage && (
             <TouchableOpacity
               onPress={() => onImagePress?.(message.imageUrl!)}
+              onLongPress={handleLongPress}
+              delayLongPress={300}
               activeOpacity={0.9}
             >
               <Image
@@ -186,6 +158,8 @@ export default function MessageBubble({
                   onFilePress?.(message.imageUrl, message.fileName || 'File');
                 }
               }}
+              onLongPress={handleLongPress}
+              delayLongPress={300}
               activeOpacity={0.7}
             >
               <View style={[styles.fileIconCircle, { backgroundColor: isOutgoing ? 'rgba(255,255,255,0.85)' : getFileIcon(message.fileName || '').bg }]}>

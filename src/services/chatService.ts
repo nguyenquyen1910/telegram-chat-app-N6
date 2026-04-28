@@ -301,7 +301,7 @@ export async function getUnreadCount(conversationId: string, currentUid: string)
   return snapshot.docs.filter(doc => doc.data().senderId !== currentUid).length;
 }
 
-export async function getMediaMessages(conversationId: string): Promise<Message[]> {
+export async function getMediaMessages(conversationId: string, currentUid: string): Promise<Message[]> {
   const firestore = getDb();
   const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
   const q = query(
@@ -312,7 +312,47 @@ export async function getMediaMessages(conversationId: string): Promise<Message[
   );
 
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Message));
+  const messages = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Message));
+  return messages.filter(msg => !msg.isRevoked && (!msg.deletedFor || !msg.deletedFor.includes(currentUid)));
+}
+
+/**
+ * Lấy danh sách file messages trong conversation
+ */
+export async function getFileMessages(conversationId: string, currentUid: string): Promise<Message[]> {
+  const firestore = getDb();
+  const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
+  const q = query(
+    messagesRef,
+    where('type', '==', 'file'),
+    orderBy('createdAt', 'desc'),
+    limit(50)
+  );
+
+  const snapshot = await getDocs(q);
+  const messages = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Message));
+  return messages.filter(msg => !msg.isRevoked && (!msg.deletedFor || !msg.deletedFor.includes(currentUid)));
+}
+
+/**
+ * Lấy danh sách messages có chứa link (http/https)
+ * Firestore không hỗ trợ text-contains, nên query all rồi filter client-side
+ */
+export async function getLinkMessages(conversationId: string, currentUid: string): Promise<Message[]> {
+  const firestore = getDb();
+  const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
+  const q = query(
+    messagesRef,
+    orderBy('createdAt', 'desc'),
+    limit(200)
+  );
+
+  const snapshot = await getDocs(q);
+  const allMessages = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Message));
+  
+  // Filter messages có chứa URL
+  const urlRegex = /https?:\/\/[^\s]+/i;
+  return allMessages.filter((msg) => !msg.isRevoked && (!msg.deletedFor || !msg.deletedFor.includes(currentUid)) && msg.text && urlRegex.test(msg.text));
 }
 
 // ==================== Conversations List ====================

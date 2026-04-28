@@ -20,9 +20,11 @@ function getDb() {
 }
 
 function mapUserDoc(docSnap: { id: string; data: () => unknown }): User {
+  const data = docSnap.data() as Record<string, unknown>;
   return {
-    ...(docSnap.data() as Record<string, unknown>),
+    ...data,
     uid: docSnap.id,
+    avatarUrl: (data.photoURL || '') as string,
   } as User;
 }
 

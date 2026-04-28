@@ -31,14 +31,16 @@ import ChatSearchBar from '@/components/chat/ChatSearchBar';
 import AttachmentPicker from '@/components/chat/AttachmentPicker';
 import MediaViewer from '@/components/chat/MediaViewer';
 import MessageActionMenu from '@/components/chat/MessageActionMenu';
+import DateSeparator from '@/components/chat/DateSeparator';
 
 // Separator key cho "Tin nhắn chưa đọc"
 const UNREAD_SEPARATOR_ID = '__unread_separator__';
 
 interface ListItem {
   id: string;
-  type: 'message' | 'unread-separator';
+  type: 'message' | 'unread-separator' | 'date-separator';
   message?: Message;
+  dateStr?: string;
 }
 
 export default function ChatDetailScreen() {
@@ -156,16 +158,33 @@ export default function ChatDetailScreen() {
     [currentUid, otherUid, lastReadBy]
   );
 
-  // Build danh sách items: messages + unread separator
+  // Build danh sách items: messages + unread separator + date separator
   const listItems: ListItem[] = useMemo(() => {
     if (messages.length === 0) return [];
 
     const items: ListItem[] = [];
     let separatorInserted = false;
     const readMs = initialLastRead?.toMillis?.() || 0;
+    let lastDateStr = '';
 
     for (const msg of messages) {
-      // Chèn separator trước tin nhắn chưa đọc đầu tiên từ người khác
+      // 1. Chèn date separator nếu khác ngày
+      let msgDateStr = '';
+      if (msg.createdAt) {
+        const d = msg.createdAt.toDate();
+        msgDateStr = `${d.getDate()} tháng ${d.getMonth() + 1}`;
+      }
+
+      if (msgDateStr && msgDateStr !== lastDateStr) {
+        items.push({
+          id: `date_${msgDateStr}_${msg.id}`,
+          type: 'date-separator',
+          dateStr: msgDateStr,
+        });
+        lastDateStr = msgDateStr;
+      }
+
+      // 2. Chèn separator trước tin nhắn chưa đọc đầu tiên từ người khác
       if (
         !separatorInserted &&
         msg.senderId !== currentUid &&
@@ -179,6 +198,7 @@ export default function ChatDetailScreen() {
         }
       }
 
+      // 3. Chèn tin nhắn
       items.push({
         id: msg.id,
         type: 'message',
@@ -355,6 +375,10 @@ export default function ChatDetailScreen() {
         );
       }
 
+      if (item.type === 'date-separator' && item.dateStr) {
+        return <DateSeparator date={item.dateStr} />;
+      }
+
       if (!item.message) return null;
 
       return (
@@ -424,7 +448,7 @@ export default function ChatDetailScreen() {
             onProfilePress={() =>
               router.push({
                 pathname: '/(tabs)/chat/user-profile',
-                params: { userId: otherUser?.uid || '' },
+                params: { userId: otherUser?.uid || '', conversationId: chatId || '' },
               })
             }
             onCallPress={() => Alert.alert('Cuộc gọi', 'Tính năng đang phát triển')}
