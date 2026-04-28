@@ -53,6 +53,8 @@ export async function uploadImage(localUri: string): Promise<UploadResult> {
       url: data.secure_url,
       size: data.bytes,
       publicId: data.public_id,
+      width: data.width,
+      height: data.height,
     };
   } catch (error) {
     console.error('Cloudinary upload error:', error);

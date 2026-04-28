@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Image } from 'react-native';
 import { Timestamp, DocumentSnapshot } from 'firebase/firestore';
 import { Message, ReplyTo, MessageType } from '@/types/chat';
 import {
@@ -190,7 +191,16 @@ export function useMessages(
       try {
         setSending(true);
 
-        // Optimistic update với local URI
+        // Lấy kích thước ảnh local để giữ tỉ lệ khi hiển thị optimistic
+        const localSize = await new Promise<{ width: number; height: number }>((resolve) => {
+          Image.getSize(
+            localUri,
+            (w, h) => resolve({ width: w, height: h }),
+            () => resolve({ width: 0, height: 0 })
+          );
+        });
+
+        // Optimistic update với local URI + kích thước ảnh
         const tempId = `temp_img_${Date.now()}`;
         const optimisticMsg: Message = {
           id: tempId,
@@ -201,6 +211,8 @@ export function useMessages(
           imageUrl: localUri,
           fileName,
           fileSize: 0,
+          imageWidth: localSize.width,
+          imageHeight: localSize.height,
           status: 'sending',
           createdAt: Timestamp.now(),
         };
@@ -214,6 +226,8 @@ export function useMessages(
           imageUrl: result.url,
           fileName,
           fileSize: result.size,
+          imageWidth: result.width,
+          imageHeight: result.height,
         });
 
         // Remove optimistic
@@ -250,7 +264,7 @@ export function useMessages(
         };
         setRawMessages((prev) => [...prev, optimisticMsg]);
 
-        const result = await uploadFile(localUri, fileName, fileSize.toString());
+        const result = await uploadFile(localUri, fileName, mimeType);
         await sendMessage(conversationId, currentUid, '', 'file', {
           imageUrl: result.url,
           fileName,

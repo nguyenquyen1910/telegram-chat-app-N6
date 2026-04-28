@@ -180,7 +180,10 @@ export default function MediaViewer({ visible, mediaUrl, mediaType, fileName, on
         </View>
 
         {/* Content */}
-        <View style={styles.content}>
+        <View style={[
+          styles.content,
+          mediaType === 'image' ? styles.contentFullscreen : styles.contentWithHeader,
+        ]}>
           {loading && (
             <ActivityIndicator size="large" color={mediaType === 'file' ? '#50A8EB' : '#FFF'} style={styles.loader} />
           )}
@@ -235,6 +238,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  contentFullscreen: {
+    marginTop: 0,
+  },
+  contentWithHeader: {
     marginTop: STATUSBAR_HEIGHT + 60,
   },
   loader: {
