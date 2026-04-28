@@ -59,6 +59,44 @@ export async function getOrCreateConversation(
   return newConv.id;
 }
 
+export async function deleteConversation(conversationId: string): Promise<void> {
+  const firestore = getDb();
+  
+  // Delete all messages in the subcollection first
+  const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
+  const messagesSnap = await getDocs(messagesRef);
+  const batch = writeBatch(firestore);
+  
+  messagesSnap.docs.forEach((docSnap) => {
+    batch.delete(docSnap.ref);
+  });
+  
+  // Delete the conversation document
+  const convRef = doc(firestore, 'conversations', conversationId);
+  batch.delete(convRef);
+  
+  await batch.commit();
+}
+
+export async function createGroupConversation(
+  groupName: string,
+  participantUids: string[]
+): Promise<string> {
+  const firestore = getDb();
+  const convRef = collection(firestore, 'conversations');
+
+  const newConv = await addDoc(convRef, {
+    participants: participantUids,
+    lastMessage: null,
+    updatedAt: serverTimestamp(),
+    type: 'group',
+    groupName,
+    groupAvatar: '',
+  });
+
+  return newConv.id;
+}
+
 export async function getConversation(conversationId: string): Promise<Conversation | null> {
   const firestore = getDb();
   const docRef = doc(firestore, 'conversations', conversationId);
@@ -197,6 +235,20 @@ export async function markMessagesAsRead(
   await batch.commit();
 }
 
+export async function getUnreadCount(conversationId: string, currentUid: string): Promise<number> {
+  const firestore = getDb();
+  const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
+  
+  const q = query(
+    messagesRef,
+    where('status', 'in', ['sending', 'sent', 'delivered'])
+  );
+
+  const snapshot = await getDocs(q);
+  // Count messages where sender is NOT the current user
+  return snapshot.docs.filter(doc => doc.data().senderId !== currentUid).length;
+}
+
 export async function getMediaMessages(conversationId: string): Promise<Message[]> {
   const firestore = getDb();
   const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
@@ -213,6 +265,17 @@ export async function getMediaMessages(conversationId: string): Promise<Message[
 
 // ==================== Conversations List ====================
 
+export async function getConversationsForUser(uid: string): Promise<Conversation[]> {
+  const firestore = getDb();
+  const convRef = collection(firestore, 'conversations');
+  const q = query(convRef, where('participants', 'array-contains', uid));
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map(
+    (docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Conversation)
+  );
+}
+
 export function subscribeToConversations(
   uid: string,
   callback: (conversations: Conversation[]) => void
@@ -221,8 +284,7 @@ export function subscribeToConversations(
   const convRef = collection(firestore, 'conversations');
   const q = query(
     convRef,
-    where('participants', 'array-contains', uid),
-    orderBy('updatedAt', 'desc')
+    where('participants', 'array-contains', uid)
   );
 
   return onSnapshot(q, (snapshot) => {
@@ -230,5 +292,9 @@ export function subscribeToConversations(
       (docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Conversation)
     );
     callback(conversations);
+  }, (error) => {
+    console.warn('[ChatService] subscribeToConversations error:', error.message);
+    // Return empty list on error instead of crashing
+    callback([]);
   });
 }

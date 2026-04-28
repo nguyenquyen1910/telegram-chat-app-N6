@@ -2,11 +2,12 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, View, StyleSheet } from 'react-native';
 import CustomTabBar from '../../components/CustomTabBar';
-import { useChatList } from '@/hooks/useChatList';
+import { useSharedChatList } from '@/context/ChatListContext';
 
 export default function TabsLayout() {
   const userAvatar = null;
-  const { totalUnreadCount } = useChatList();
+  const { totalUnreadCount } = useSharedChatList();
+
 
   return (
     <Tabs

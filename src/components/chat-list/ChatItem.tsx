@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableHighlight } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Conversation, Message } from '@/types/chat';
-import { formatMessageTime } from '@/constants/chat';
+import { formatChatListTime } from '@/constants/chat';
 import { Avatar } from './Avatar';
 import { Badge } from './Badge';
 
@@ -19,11 +19,12 @@ export interface ChatWithUser {
 
 interface ChatItemProps {
   chat: ChatWithUser;
+  currentUid?: string | null;
   onPress: () => void;
   isMuted?: boolean;
 }
 
-export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItemProps) => {
+export const ChatItem = React.memo(({ chat, currentUid, onPress, isMuted = false }: ChatItemProps) => {
   const { conversation, otherUser, unreadCount = 0 } = chat;
   const isGroup = conversation.type === 'group';
 
@@ -36,23 +37,24 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
     : otherUser?.avatarUrl;
   const isOnline = isGroup ? false : (otherUser?.isOnline || false);
 
-  // Determine last message text and tick
+  // Determine last message text and prefix icon
   const lastMsg = conversation.lastMessage;
+  const isSentByMe = lastMsg?.senderId === currentUid;
+
+  let lastMsgPrefix = null;
   let lastMsgText = 'Bắt đầu cuộc trò chuyện';
+
   if (lastMsg) {
-    if (lastMsg.type === 'image') lastMsgText = '📷 Ảnh';
-    if (lastMsg.type === 'voice') lastMsgText = '🎤 Tin nhắn thoại';
-    if (lastMsg.type === 'text' || lastMsg.type === 'reply') lastMsgText = lastMsg.text || '';
-    
-    // Add sender name prefix for groups
-    if (isGroup && lastMsg.senderId !== 'user_me') { // Assuming 'user_me' handles your own messages, but we will rely on names
-       // We don't have all names easily here without a map, but if lastMsg has senderName we could use it
+    if (lastMsg.type === 'image') {
+      lastMsgPrefix = <Ionicons name="image" size={15} color="#54A5E8" style={{ marginRight: 4 }} />;
+      lastMsgText = 'Ảnh';
+    } else if (lastMsg.type === 'voice') {
+      lastMsgPrefix = <Ionicons name="mic" size={15} color="#54A5E8" style={{ marginRight: 4 }} />;
+      lastMsgText = 'Tin nhắn thoại';
+    } else if (lastMsg.type === 'text' || lastMsg.type === 'reply') {
+      lastMsgText = lastMsg.text || '';
     }
   }
-
-  // Check if last message was sent by the current user
-  // This is a naive check, ideally we compare with current context UID
-  const isSentByMe = lastMsg?.senderId ? false : false; // Placeholder
 
   return (
     <TouchableHighlight 
@@ -79,14 +81,22 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
             
             {lastMsg?.timestamp && (
               <Text style={[styles.time, unreadCount > 0 && !isMuted ? styles.timeUnread : null]}>
-                {formatMessageTime(lastMsg.timestamp)}
+                {(() => { try { return formatChatListTime(lastMsg.timestamp); } catch { return ''; } })()}
               </Text>
             )}
           </View>
           
           <View style={styles.bottomRow}>
             <View style={styles.lastMsgContainer}>
-              {/* Could show double tick here if sent by me */}
+              {isSentByMe && (
+                <Ionicons 
+                  name="checkmark-done" 
+                  size={16} 
+                  color="#54A5E8" 
+                  style={{ marginRight: 4, marginTop: 1 }} 
+                />
+              )}
+              {lastMsgPrefix}
               <Text style={styles.lastMsg} numberOfLines={2}>
                 {lastMsgText}
               </Text>
