@@ -81,6 +81,7 @@ export interface ChatHeaderProps {
   userAvatar: string;
   lastSeen: string;
   isOnline: boolean;
+  isGroup?: boolean;
   onBackPress: () => void;
   onProfilePress: () => void;
   onCallPress?: () => void;

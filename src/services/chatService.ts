@@ -100,6 +100,42 @@ export async function createGroupConversation(
   return newConv.id;
 }
 
+export async function addMemberToGroup(conversationId: string, uid: string): Promise<void> {
+  const firestore = getDb();
+  const convRef = doc(firestore, 'conversations', conversationId);
+  await updateDoc(convRef, {
+    participants: arrayUnion(uid),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function leaveGroupConversation(conversationId: string, uid: string): Promise<void> {
+  const firestore = getDb();
+  const convRef = doc(firestore, 'conversations', conversationId);
+  await updateDoc(convRef, {
+    participants: arrayRemove(uid),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateGroupAvatar(conversationId: string, avatarUrl: string): Promise<void> {
+  const firestore = getDb();
+  const convRef = doc(firestore, 'conversations', conversationId);
+  await updateDoc(convRef, {
+    groupAvatar: avatarUrl,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateGroupName(conversationId: string, groupName: string): Promise<void> {
+  const firestore = getDb();
+  const convRef = doc(firestore, 'conversations', conversationId);
+  await updateDoc(convRef, {
+    groupName,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function getConversation(conversationId: string): Promise<Conversation | null> {
   const firestore = getDb();
   const docRef = doc(firestore, 'conversations', conversationId);

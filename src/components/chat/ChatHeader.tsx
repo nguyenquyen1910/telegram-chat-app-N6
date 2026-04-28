@@ -10,6 +10,7 @@ export default function ChatHeader({
   userAvatar,
   lastSeen,
   isOnline,
+  isGroup,
   onBackPress,
   onProfilePress,
   onCallPress,
@@ -35,6 +36,10 @@ export default function ChatHeader({
         >
           {userAvatar ? (
             <Image source={{ uri: userAvatar }} style={styles.avatar} />
+          ) : isGroup ? (
+            <View style={styles.avatarPlaceholderGroup}>
+              <Ionicons name="people" size={24} color="#FFFFFF" />
+            </View>
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarLetter}>
@@ -109,6 +114,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#50A8EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlaceholderGroup: {
     width: 40,
     height: 40,
     borderRadius: 20,
