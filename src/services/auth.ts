@@ -1,7 +1,6 @@
 import { auth, db } from '@/config/firebase';
 import {
   onAuthStateChanged,
-  User,
   signOut as firebaseSignOut,
   signInAnonymously,
 } from 'firebase/auth';
@@ -20,7 +19,23 @@ const FIXED_SMS_OTP = '123456';
 // Storage keys
 const AUTH_STORAGE_KEY = '@telegram_auth_user';
 const SESSION_KEY = '@telegram_last_active';
-const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+export interface AuthUser {
+  uid: string;
+  phoneNumber?: string;
+  email?: string;
+  displayName?: string;
+  photoURL?: string;
+  avatarUrl?: string;
+  isOnline?: boolean;
+  createdAt?: unknown;
+  lastSeen?: unknown;
+}
+
+type AuthStateListener = (user: AuthUser | null) => void;
+const authStateListeners = new Set<AuthStateListener>();
+let cachedAuthUser: AuthUser | null | undefined;
 
 // OTP state
 let currentOTP: string | null = null;
@@ -32,6 +47,41 @@ const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 // Generate random 6-digit OTP
 const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const generateAppUserId = (): string => {
+  return `user-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const emitAuthState = (user: AuthUser | null) => {
+  cachedAuthUser = user;
+  authStateListeners.forEach((listener) => listener(user));
+};
+
+const readStoredAuthUser = async (): Promise<AuthUser | null> => {
+  const stores = await AsyncStorage.multiGet([AUTH_STORAGE_KEY, SESSION_KEY]);
+  const stored = stores[0][1];
+  const lastActive = stores[1][1];
+
+  if (!stored) {
+    console.log('[AUTH] No stored session found');
+    return null;
+  }
+
+  if (lastActive) {
+    const elapsed = Date.now() - parseInt(lastActive, 10);
+    if (elapsed > SESSION_TIMEOUT_MS) {
+      console.log(`[AUTH] Session expired (${Math.round(elapsed / 1000)}s ago)`);
+      await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      await AsyncStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+  }
+
+  const userData = JSON.parse(stored) as AuthUser;
+  await AsyncStorage.setItem(SESSION_KEY, Date.now().toString());
+  console.log('[AUTH] User restored in session:', userData.uid);
+  return userData;
 };
 
 // ============ PHONE CHECK ============
@@ -58,8 +108,9 @@ export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> =>
     const snapshot = await getDocs(q);
     console.log(`[DB] Found ${snapshot.size} users with phone "${phoneNumber}"`);
     if (!snapshot.empty) {
+      const docSnap = snapshot.docs[0];
       const data = snapshot.docs[0].data();
-      console.log(`[DB] User found: uid=${data.uid}, email=${data.email}`);
+      console.log(`[DB] User found: uid=${docSnap.id}, email=${data.email}`);
     }
     return !snapshot.empty;
   } catch (error) {
@@ -176,7 +227,7 @@ export const registerUser = async (
   phoneNumber: string,
   email: string
 ): Promise<any> => {
-  const uid = `user-${Date.now()}`;
+  const uid = generateAppUserId();
   const userData = {
     uid,
     phoneNumber,
@@ -184,13 +235,11 @@ export const registerUser = async (
     createdAt: new Date().toISOString(),
   };
 
-  // Try Firebase anonymous sign-in
-  let finalUid = uid;
+  // Keep Firebase anonymous auth only for Firestore access.
+  // App identity must stay on our own uid to avoid cross-account collisions.
   if (auth) {
     try {
-      const result = await signInAnonymously(auth);
-      finalUid = result.user.uid;
-      userData.uid = finalUid;
+      await signInAnonymously(auth);
     } catch (e) {
       console.warn('[AUTH] Firebase anonymous sign-in failed, using local auth');
     }
@@ -199,8 +248,8 @@ export const registerUser = async (
   // Save to Firestore
   if (db) {
     try {
-      await setDoc(doc(db, 'users', finalUid), {
-        uid: finalUid,
+      await setDoc(doc(db, 'users', uid), {
+        uid,
         phoneNumber,
         email,
         displayName: '',
@@ -209,7 +258,7 @@ export const registerUser = async (
         lastSeen: serverTimestamp(),
         createdAt: serverTimestamp(),
       });
-      console.log(`[DB] User registered in Firestore: ${finalUid}`);
+      console.log(`[DB] User registered in Firestore: ${uid}`);
     } catch (e) {
       console.warn('[DB] Failed to save user to Firestore:', e);
     }
@@ -218,6 +267,7 @@ export const registerUser = async (
   // Save to AsyncStorage for persistent login
   await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
   await updateLastActive();
+  emitAuthState(userData as AuthUser);
   return userData;
 };
 
@@ -234,7 +284,11 @@ export const loginUser = async (phoneNumber: string): Promise<any> => {
   }
 
   const userDoc = snapshot.docs[0];
-  const userData = userDoc.data();
+  const rawUserData = userDoc.data() as Record<string, any>;
+  const userData = {
+    ...rawUserData,
+    uid: userDoc.id,
+  };
 
   // Update online status
   try {
@@ -244,6 +298,19 @@ export const loginUser = async (phoneNumber: string): Promise<any> => {
     }, { merge: true });
   } catch (e) {
     console.warn('[DB] Failed to update user status:', e);
+  }
+
+  if (rawUserData.uid !== userDoc.id) {
+    try {
+      await setDoc(
+        doc(db, 'users', userDoc.id),
+        { uid: userDoc.id },
+        { merge: true }
+      );
+      console.log(`[DB] Normalized user uid field for phone ${phoneNumber}: ${userDoc.id}`);
+    } catch (e) {
+      console.warn('[DB] Failed to normalize user uid field:', e);
+    }
   }
 
   // Try Firebase anonymous sign-in
@@ -259,6 +326,7 @@ export const loginUser = async (phoneNumber: string): Promise<any> => {
   await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
   await updateLastActive();
   console.log(`[AUTH] User logged in: ${userData.uid}`);
+  emitAuthState(userData as AuthUser);
   return userData;
 };
 
@@ -275,6 +343,7 @@ export const signOutUser = async (): Promise<void> => {
       // Ignore
     }
   }
+  emitAuthState(null);
 };
 
 // Update last active timestamp (call this when app is active)
@@ -283,48 +352,40 @@ export const updateLastActive = async (): Promise<void> => {
 };
 
 // On auth state change - check session timeout
-export const onAuthStateChange = (callback: (user: User | null) => void) => {
-  AsyncStorage.multiGet([AUTH_STORAGE_KEY, SESSION_KEY]).then((stores) => {
-    const stored = stores[0][1];
-    const lastActive = stores[1][1];
+export const onAuthStateChange = (callback: (user: AuthUser | null) => void) => {
+  let isActive = true;
+  authStateListeners.add(callback);
 
-    if (stored) {
-      // Check session timeout
-      if (lastActive) {
-        const elapsed = Date.now() - parseInt(lastActive, 10);
-        if (elapsed > SESSION_TIMEOUT_MS) {
-          // Session expired → clear and require re-login
-          console.log(`[AUTH] Session expired (${Math.round(elapsed / 1000)}s ago)`);
-          AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-          AsyncStorage.removeItem(SESSION_KEY);
-          callback(null);
-          return;
+  if (cachedAuthUser !== undefined) {
+    callback(cachedAuthUser);
+  } else {
+    readStoredAuthUser()
+      .then((user) => {
+        cachedAuthUser = user;
+        if (isActive) {
+          callback(user);
         }
-      }
-      // Session valid → restore user
-      const userData = JSON.parse(stored);
-      // Update last active
-      AsyncStorage.setItem(SESSION_KEY, Date.now().toString());
-      console.log('[AUTH] Session restored');
-      callback(userData as any);
-    } else if (auth) {
-      onAuthStateChanged(auth, callback);
-    } else {
-      callback(null);
-    }
-  }).catch(() => {
-    callback(null);
-  });
-
-  if (auth) {
-    return onAuthStateChanged(auth, (firebaseUser) => {
-      AsyncStorage.getItem(AUTH_STORAGE_KEY).then((stored) => {
-        if (!stored) {
-          callback(firebaseUser);
+      })
+      .catch((error) => {
+        console.warn('[AUTH] Failed to restore session:', error);
+        cachedAuthUser = null;
+        if (isActive) {
+          callback(null);
         }
       });
-    });
   }
 
-  return () => {};
+  const unsubscribeFirebase = auth
+    ? onAuthStateChanged(auth, (firebaseUser) => {
+        if (firebaseUser) {
+          console.log('[AUTH] Firebase anonymous session active:', firebaseUser.uid);
+        }
+      })
+    : () => {};
+
+  return () => {
+    isActive = false;
+    authStateListeners.delete(callback);
+    unsubscribeFirebase();
+  };
 };
