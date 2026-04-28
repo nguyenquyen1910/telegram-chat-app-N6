@@ -225,13 +225,15 @@ export const verifySmsOTP = async (code: string): Promise<boolean> => {
 // Register: save new user to Firestore after all verifications
 export const registerUser = async (
   phoneNumber: string,
-  email: string
+  email: string,
+  displayName: string = ''
 ): Promise<any> => {
   const uid = generateAppUserId();
   const userData = {
     uid,
     phoneNumber,
     email,
+    displayName,
     createdAt: new Date().toISOString(),
   };
 
@@ -252,7 +254,7 @@ export const registerUser = async (
         uid,
         phoneNumber,
         email,
-        displayName: '',
+        displayName,
         photoURL: '',
         isOnline: true,
         lastSeen: serverTimestamp(),

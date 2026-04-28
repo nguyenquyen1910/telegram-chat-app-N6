@@ -8,12 +8,10 @@ import {
     TouchableOpacity,
     Alert,
     ActivityIndicator,
-    Modal,
-    Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { verifySmsOTP, registerUser } from '@/services/auth';
+import { verifySmsOTP } from '@/services/auth';
 import { useAuth } from '@/context/AuthContext';
 
 const CODE_LENGTH = 6;
@@ -27,10 +25,7 @@ export default function VerifySmsScreen() {
     const { setIsVerifying } = useAuth();
     const [code, setCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [showSuccess, setShowSuccess] = useState(false);
     const inputRef = useRef<TextInput>(null);
-    const scaleAnim = useRef(new Animated.Value(0)).current;
-    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 300);
@@ -42,42 +37,24 @@ export default function VerifySmsScreen() {
         }
     }, [code]);
 
-    const playSuccessAnimation = () => {
-        setShowSuccess(true);
-        Animated.sequence([
-            Animated.spring(scaleAnim, {
-                toValue: 1,
-                tension: 50,
-                friction: 3,
-                useNativeDriver: true,
-            }),
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 400,
-                useNativeDriver: true,
-            }),
-        ]).start();
-    };
+
 
     const handleVerify = async () => {
         if (code.length !== CODE_LENGTH) return;
         setIsLoading(true);
         try {
             await verifySmsOTP(code);
-            await registerUser(phoneNumber, email);
-            playSuccessAnimation();
+            // Navigate to profile setup screen
+            router.push({
+                pathname: '/(auth)/setup-profile',
+                params: { phoneNumber, email },
+            });
         } catch (error: any) {
             Alert.alert('Sai mã', error.message || 'Mã SMS không đúng.');
             setCode('');
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const handleGoToChat = () => {
-        setShowSuccess(false);
-        setIsVerifying(false);
-        router.replace('/(tabs)/chat');
     };
 
     return (
@@ -163,50 +140,7 @@ export default function VerifySmsScreen() {
                 </View>
             </View>
 
-            {/* Success Modal */}
-            <Modal visible={showSuccess} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <View style={styles.successModal}>
-                        {/* Animated checkmark */}
-                        <Animated.View
-                            style={[
-                                styles.successIconCircle,
-                                { transform: [{ scale: scaleAnim }] },
-                            ]}
-                        >
-                            <Ionicons name="checkmark-circle" size={72} color="#34C759" />
-                        </Animated.View>
 
-                        <Animated.View style={{ opacity: fadeAnim, alignItems: 'center' }}>
-                            <Text style={styles.successTitle}>Welcome!</Text>
-                            <Text style={styles.successSubtitle}>
-                                Your account has been created successfully
-                            </Text>
-
-                            <View style={styles.successInfoCard}>
-                                <View style={styles.successInfoRow}>
-                                    <Ionicons name="call-outline" size={16} color="#8E8E93" />
-                                    <Text style={styles.successInfoText}>{phoneNumber}</Text>
-                                </View>
-                                <View style={styles.successDivider} />
-                                <View style={styles.successInfoRow}>
-                                    <Ionicons name="mail-outline" size={16} color="#8E8E93" />
-                                    <Text style={styles.successInfoText}>{email}</Text>
-                                </View>
-                            </View>
-
-                            <TouchableOpacity
-                                style={styles.successButton}
-                                onPress={handleGoToChat}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name="chatbubbles" size={20} color="#FFFFFF" />
-                                <Text style={styles.successButtonText}>Start Messaging</Text>
-                            </TouchableOpacity>
-                        </Animated.View>
-                    </View>
-                </View>
-            </Modal>
         </SafeAreaView>
     );
 }
@@ -242,37 +176,4 @@ const styles = StyleSheet.create({
     stepRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
     stepTextDone: { fontSize: 14, color: '#34C759', fontWeight: '500' },
     stepTextActive: { fontSize: 14, color: '#007AFF', fontWeight: '600' },
-    // Success Modal
-    modalOverlay: {
-        flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center', alignItems: 'center',
-    },
-    successModal: {
-        backgroundColor: '#FFFFFF', borderRadius: 20,
-        padding: 32, width: '85%', alignItems: 'center',
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
-    },
-    successIconCircle: { marginBottom: 16 },
-    successTitle: { fontSize: 26, fontWeight: '700', color: '#000000', marginBottom: 8 },
-    successSubtitle: {
-        fontSize: 15, color: '#8E8E93', textAlign: 'center',
-        lineHeight: 20, marginBottom: 24,
-    },
-    successInfoCard: {
-        backgroundColor: '#F9F9F9', borderRadius: 12,
-        padding: 16, width: '100%', marginBottom: 24,
-    },
-    successInfoRow: {
-        flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
-    },
-    successInfoText: { fontSize: 14, color: '#333333', fontWeight: '500' },
-    successDivider: { height: 1, backgroundColor: '#E5E5EA', marginVertical: 6 },
-    successButton: {
-        backgroundColor: '#007AFF', borderRadius: 14,
-        paddingVertical: 16, paddingHorizontal: 32,
-        flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%',
-        justifyContent: 'center',
-    },
-    successButtonText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
 });

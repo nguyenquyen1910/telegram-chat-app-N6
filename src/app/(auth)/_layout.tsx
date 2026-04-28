@@ -26,6 +26,7 @@ export default function AuthLayout() {
       <Stack.Screen name="enter-email" />
       <Stack.Screen name="verify-code" />
       <Stack.Screen name="verify-sms" />
+      <Stack.Screen name="setup-profile" />
     </Stack>
   );
 }
