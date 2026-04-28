@@ -19,13 +19,20 @@ function getDb() {
   return db;
 }
 
+function mapUserDoc(docSnap: { id: string; data: () => unknown }): User {
+  return {
+    ...(docSnap.data() as Record<string, unknown>),
+    uid: docSnap.id,
+  } as User;
+}
+
 export async function getUserById(uid: string): Promise<User | null> {
   const firestore = getDb();
   const docRef = doc(firestore, 'users', uid);
   const docSnap = await getDoc(docRef);
 
   if (!docSnap.exists()) return null;
-  return { uid: docSnap.id, ...docSnap.data() } as User;
+  return mapUserDoc(docSnap);
 }
 
 export async function createOrUpdateUser(user: Partial<User> & { uid: string }): Promise<void> {
@@ -62,7 +69,7 @@ export function subscribeToUserStatus(
   const docRef = doc(firestore, 'users', uid);
   return onSnapshot(docRef, (docSnap) => {
     if (docSnap.exists()) {
-      callback({ uid: docSnap.id, ...docSnap.data() } as User);
+      callback(mapUserDoc(docSnap));
     }
   });
 }
@@ -75,5 +82,5 @@ export async function getUserByPhone(phoneNumber: string): Promise<User | null> 
 
   if (snapshot.empty) return null;
   const docSnap = snapshot.docs[0];
-  return { uid: docSnap.id, ...docSnap.data() } as User;
+  return mapUserDoc(docSnap);
 }
