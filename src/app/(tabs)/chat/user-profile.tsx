@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,13 @@ import {
   Image,
   FlatList,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { MOCK_OTHER_USER, MOCK_MESSAGES, formatLastSeen } from '@/constants/chat';
-import { Message } from '@/types/chat';
+import { formatLastSeen } from '@/constants/chat';
+import { Message, User } from '@/types/chat';
+import { getUserById } from '@/services/userService';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import ProfileActions from '@/components/profile/ProfileActions';
 import ProfileInfo from '@/components/profile/ProfileInfo';
@@ -30,22 +32,28 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const [activeTab, setActiveTab] = useState('Media');
+  const [user, setUser] = useState<User | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
 
-  const user = MOCK_OTHER_USER;
+  useEffect(() => {
+    if (!userId) return;
+    getUserById(userId).then((u) => {
+      setUser(u);
+      setLoadingUser(false);
+    }).catch(() => setLoadingUser(false));
+  }, [userId]);
 
-  const mediaMessages = useMemo(
-    () => MOCK_MESSAGES.filter((m) => m.type === 'image'),
-    []
-  );
+  // Media messages sẽ trống tạm thời (cần query riêng nếu muốn)
+  const mediaMessages: Message[] = [];
 
   // Header component cho FlatList (profile info + tabs)
   const ListHeader = () => (
     <View>
       <ProfileHeader
-        displayName={user.displayName}
-        avatarUrl={user.avatarUrl}
-        lastSeen={formatLastSeen(user.lastSeen, user.isOnline)}
-        isOnline={user.isOnline}
+        displayName={user?.displayName || 'User'}
+        avatarUrl={user?.avatarUrl || ''}
+        lastSeen={formatLastSeen(user?.lastSeen || null, user?.isOnline || false)}
+        isOnline={user?.isOnline || false}
       />
 
       <ProfileActions
@@ -55,7 +63,7 @@ export default function UserProfileScreen() {
         onVideoCall={() => console.log('Video call')}
       />
 
-      <ProfileInfo phoneNumber={user.phoneNumber} bio={user.bio} />
+      <ProfileInfo phoneNumber={user?.phoneNumber || ''} bio={user?.bio || ''} />
 
       {/* Tab bar */}
       <View style={styles.tabBarContainer}>

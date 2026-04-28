@@ -298,3 +298,20 @@ export function subscribeToConversations(
     callback([]);
   });
 }
+
+// ==================== Read Status ====================
+
+export async function markConversationAsRead(
+  conversationId: string,
+  uid: string
+): Promise<void> {
+  try {
+    const firestore = getDb();
+    const convRef = doc(firestore, 'conversations', conversationId);
+    await updateDoc(convRef, {
+      [`lastReadBy.${uid}`]: serverTimestamp(),
+    });
+  } catch (error) {
+    console.warn('[ChatService] markConversationAsRead error:', error);
+  }
+}

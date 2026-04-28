@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Timestamp } from 'firebase/firestore';
 import { Conversation, User } from '@/types/chat';
 import { getConversation, subscribeToConversation } from '@/services/chatService';
 import { getUserById, subscribeToUserStatus } from '@/services/userService';
@@ -6,6 +7,7 @@ import { getUserById, subscribeToUserStatus } from '@/services/userService';
 interface UseConversationReturn {
   conversation: Conversation | null;
   otherUser: User | null;
+  lastReadBy: { [uid: string]: Timestamp } | null;
   loading: boolean;
   error: string | null;
 }
@@ -53,7 +55,7 @@ export function useConversation(
           });
         }
 
-        // Listen thay đổi conversation
+        // Listen thay đổi conversation (bao gồm lastReadBy)
         unsubConv = subscribeToConversation(conversationId!, (updatedConv) => {
           setConversation(updatedConv);
         });
@@ -76,7 +78,9 @@ export function useConversation(
   return {
     conversation,
     otherUser,
+    lastReadBy: conversation?.lastReadBy || null,
     loading,
     error,
   };
 }
+

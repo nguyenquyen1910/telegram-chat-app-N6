@@ -26,13 +26,14 @@ export interface Conversation {
   lastMessage: LastMessage | null;
   updatedAt: Timestamp;
   type: 'private' | 'group';
+  lastReadBy?: { [uid: string]: Timestamp };
   groupName?: string;
   groupAvatar?: string;
 }
 
 // ==================== Message ====================
 export type MessageType = 'text' | 'image' | 'file' | 'reply' | 'voice';
-export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
+export type MessageStatus = 'sending' | 'sent' | 'read';
 
 export interface ReplyTo {
   messageId: string;

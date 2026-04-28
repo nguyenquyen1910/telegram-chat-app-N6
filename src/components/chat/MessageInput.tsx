@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
     paddingTop: 4,
-    paddingBottom: 28,
+    paddingBottom: 8,
   },
   iconButton: {
     width: 44,

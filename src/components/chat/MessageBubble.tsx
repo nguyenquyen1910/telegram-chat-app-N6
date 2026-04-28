@@ -34,10 +34,7 @@ export default function MessageBubble({
         <Ionicons name="checkmark-done" size={14} color={light ? '#FFFFFF' : '#4ECC5E'} style={{ marginLeft: 3 }} />
       )}
       {isOutgoing && message.status === 'sent' && (
-        <Ionicons name="checkmark" size={14} color={light ? '#FFFFFF' : '#A8A8A8'} style={{ marginLeft: 3 }} />
-      )}
-      {isOutgoing && message.status === 'delivered' && (
-        <Ionicons name="checkmark-done" size={14} color={light ? '#FFFFFF' : '#A8A8A8'} style={{ marginLeft: 3 }} />
+        <Ionicons name="checkmark" size={14} color={light ? '#FFFFFF' : '#6DB870'} style={{ marginLeft: 3 }} />
       )}
       {isOutgoing && message.status === 'sending' && (
         <Ionicons name="time-outline" size={12} color={light ? '#FFFFFF' : '#A8A8A8'} style={{ marginLeft: 3 }} />
