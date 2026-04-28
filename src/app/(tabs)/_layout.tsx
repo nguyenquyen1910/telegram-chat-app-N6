@@ -2,9 +2,12 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, View, StyleSheet } from 'react-native';
 import CustomTabBar from '../../components/CustomTabBar';
+import { useSharedChatList } from '@/context/ChatListContext';
 
 export default function TabsLayout() {
   const userAvatar = null;
+  const { totalUnreadCount } = useSharedChatList();
+
 
   return (
     <Tabs
@@ -47,6 +50,7 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: 'Tin nhắn',
+          tabBarBadge: totalUnreadCount > 0 ? totalUnreadCount : undefined,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "chatbubbles" : "chatbubbles-outline"}

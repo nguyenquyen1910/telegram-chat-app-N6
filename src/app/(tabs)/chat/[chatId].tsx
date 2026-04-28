@@ -10,27 +10,38 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Message } from '@/types/chat';
-import { MOCK_CURRENT_USER, formatLastSeen } from '@/constants/chat';
+import { formatLastSeen } from '@/constants/chat';
+import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
+import { useChatWallpaper } from '@/hooks/useChatWallpaper';
 import ChatHeader from '@/components/chat/ChatHeader';
 import MessageBubble from '@/components/chat/MessageBubble';
 import MessageInput from '@/components/chat/MessageInput';
+import WallpaperPicker from '@/components/chat/WallpaperPicker';
+import ChatOptionsMenu from '@/components/chat/ChatOptionsMenu';
 
 export default function ChatDetailScreen() {
   const router = useRouter();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
+  const { user } = useAuth();
+  const currentUid = (user as any)?.uid || null;
 
-  const { conversation, otherUser, currentUser } = useConversation(chatId || null);
+  const { conversation, otherUser } = useConversation(chatId || null, currentUid);
   const { messages, loading, sending, sendTextMessage, sendImageMessage, loadMore, hasMore } =
-    useMessages(chatId || null);
+    useMessages(chatId || null, currentUid);
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [pendingImage, setPendingImage] = useState<{ uri: string; fileName: string } | null>(null);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
+  const { currentWallpaper, setWallpaper } = useChatWallpaper();
+
   const isOutgoing = useCallback(
-    (msg: Message) => msg.senderId === MOCK_CURRENT_USER.uid,
-    []
+    (msg: Message) => msg.senderId === currentUid,
+    [currentUid]
   );
 
   const handleReply = useCallback((msg: Message) => {
@@ -44,7 +55,7 @@ export default function ChatDetailScreen() {
             messageId: replyingTo.id,
             text: replyingTo.type === 'image' ? '📷 Ảnh' : replyingTo.text,
             senderName: isOutgoing(replyingTo)
-              ? currentUser.displayName
+              ? 'Bạn'
               : otherUser?.displayName || 'User',
           }
         : undefined;
@@ -56,10 +67,11 @@ export default function ChatDetailScreen() {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     },
-    [replyingTo, sendTextMessage, otherUser, currentUser, isOutgoing]
+    [replyingTo, sendTextMessage, otherUser, isOutgoing]
   );
 
-  const handleSendImage = useCallback(async () => {
+  // Chọn ảnh từ thư viện — KHÔNG gửi ngay, chỉ set pending
+  const handlePickImage = useCallback(async () => {
     try {
       const ImagePicker = await import('expo-image-picker');
 
@@ -78,17 +90,27 @@ export default function ChatDetailScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const fileName = asset.fileName || `IMG_${Date.now()}.jpg`;
-        await sendImageMessage(asset.uri, fileName);
-
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        // Set pending image → MessageInput sẽ hiện preview
+        setPendingImage({ uri: asset.uri, fileName });
       }
     } catch (error) {
       console.error('Image picker error:', error);
       Alert.alert('Lỗi', 'Không thể chọn ảnh.');
     }
-  }, [sendImageMessage]);
+  }, []);
+
+  // Gửi ảnh kèm caption từ MessageInput
+  const handleSendImage = useCallback(
+    async (uri: string, fileName: string, caption: string) => {
+      setPendingImage(null);
+      await sendImageMessage(uri, fileName, caption || undefined);
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    },
+    [sendImageMessage]
+  );
 
   const renderMessage = useCallback(
     ({ item }: { item: Message }) => (
@@ -103,10 +125,13 @@ export default function ChatDetailScreen() {
     [isOutgoing, otherUser, handleReply]
   );
 
+  // Tính background color từ wallpaper
+  const wallpaperBg = currentWallpaper.colors[0];
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#54A5E8" />
+        <ActivityIndicator size="large" color="#50A8EB" />
       </View>
     );
   }
@@ -131,10 +156,25 @@ export default function ChatDetailScreen() {
               params: { userId: otherUser?.uid || '' },
             })
           }
+          onCallPress={() => Alert.alert('Cuộc gọi', 'Tính năng đang phát triển')}
+          onMenuPress={() => setShowOptionsMenu(true)}
         />
 
-        {/* Messages */}
-        <View style={styles.messagesArea}>
+        {/* Messages area with wallpaper background */}
+        <View style={[styles.messagesArea, { backgroundColor: wallpaperBg }]}>
+          {/* Gradient overlay for two-tone wallpapers */}
+          {currentWallpaper.type === 'gradient' && currentWallpaper.colors.length >= 2 && (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: currentWallpaper.colors[1],
+                  opacity: 0.4,
+                },
+              ]}
+            />
+          )}
+
           <FlatList
             ref={flatListRef}
             data={messages}
@@ -159,18 +199,36 @@ export default function ChatDetailScreen() {
         {/* Input bar */}
         <MessageInput
           onSendText={handleSendText}
+          onPickImage={handlePickImage}
           onSendImage={handleSendImage}
+          pendingImage={pendingImage}
+          onCancelImage={() => setPendingImage(null)}
           replyingTo={replyingTo}
           replyingSenderName={
             replyingTo
               ? isOutgoing(replyingTo)
-                ? currentUser.displayName
+                ? 'Bạn'
                 : otherUser?.displayName
               : undefined
           }
           onCancelReply={() => setReplyingTo(null)}
         />
       </KeyboardAvoidingView>
+
+      {/* Chat options menu */}
+      <ChatOptionsMenu
+        visible={showOptionsMenu}
+        onClose={() => setShowOptionsMenu(false)}
+        onChangeWallpaper={() => setShowWallpaperPicker(true)}
+      />
+
+      {/* Wallpaper picker */}
+      <WallpaperPicker
+        visible={showWallpaperPicker}
+        onClose={() => setShowWallpaperPicker(false)}
+        currentWallpaperId={currentWallpaper.id}
+        onSelect={setWallpaper}
+      />
     </View>
   );
 }
@@ -178,20 +236,19 @@ export default function ChatDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EFEFF4',
+    backgroundColor: '#F6F8F3',
   },
   flex: {
     flex: 1,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#EFEFF4',
+    backgroundColor: '#F6F8F3',
     alignItems: 'center',
     justifyContent: 'center',
   },
   messagesArea: {
     flex: 1,
-    backgroundColor: 'rgba(43, 120, 205, 0.08)',
   },
   messagesContent: {
     paddingVertical: 8,

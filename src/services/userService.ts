@@ -5,6 +5,11 @@ import {
   updateDoc,
   onSnapshot,
   serverTimestamp,
+  collection,
+  query,
+  where,
+  limit,
+  getDocs,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { User } from '@/types/chat';
@@ -14,13 +19,20 @@ function getDb() {
   return db;
 }
 
+function mapUserDoc(docSnap: { id: string; data: () => unknown }): User {
+  return {
+    ...(docSnap.data() as Record<string, unknown>),
+    uid: docSnap.id,
+  } as User;
+}
+
 export async function getUserById(uid: string): Promise<User | null> {
   const firestore = getDb();
   const docRef = doc(firestore, 'users', uid);
   const docSnap = await getDoc(docRef);
 
   if (!docSnap.exists()) return null;
-  return { uid: docSnap.id, ...docSnap.data() } as User;
+  return mapUserDoc(docSnap);
 }
 
 export async function createOrUpdateUser(user: Partial<User> & { uid: string }): Promise<void> {
@@ -57,7 +69,18 @@ export function subscribeToUserStatus(
   const docRef = doc(firestore, 'users', uid);
   return onSnapshot(docRef, (docSnap) => {
     if (docSnap.exists()) {
-      callback({ uid: docSnap.id, ...docSnap.data() } as User);
+      callback(mapUserDoc(docSnap));
     }
   });
+}
+
+export async function getUserByPhone(phoneNumber: string): Promise<User | null> {
+  const firestore = getDb();
+  const usersRef = collection(firestore, 'users');
+  const q = query(usersRef, where('phoneNumber', '==', phoneNumber), limit(1));
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) return null;
+  const docSnap = snapshot.docs[0];
+  return mapUserDoc(docSnap);
 }

@@ -112,7 +112,11 @@ export default function VerifySmsScreen() {
                     </Text>
                 </View>
 
-                <View style={styles.codeContainer}>
+                <TouchableOpacity 
+                    style={styles.codeContainer} 
+                    onPress={() => inputRef.current?.focus()} 
+                    activeOpacity={1}
+                >
                     {Array.from({ length: CODE_LENGTH }).map((_, index) => (
                         <View
                             key={index}
@@ -127,7 +131,7 @@ export default function VerifySmsScreen() {
                             </Text>
                         </View>
                     ))}
-                </View>
+                </TouchableOpacity>
 
                 <TextInput
                     ref={inputRef}

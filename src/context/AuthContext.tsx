@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { User } from 'firebase/auth';
-import { onAuthStateChange, signOutUser, updateLastActive } from '@/services/auth';
+import { AuthUser, onAuthStateChange, signOutUser, updateLastActive } from '@/services/auth';
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   isVerifying: boolean;
@@ -22,7 +21,7 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
   const appState = useRef(AppState.currentState);

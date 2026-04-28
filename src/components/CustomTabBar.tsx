@@ -43,12 +43,14 @@ function TabItem({
   isFocused,
   onPress,
   onLongPress,
+  badge,
 }: {
   label: string;
   routeName: string;
   isFocused: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  badge?: number | string;
 }) {
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -93,6 +95,11 @@ function TabItem({
           size={24}
           color={isFocused ? '#2196F3' : '#555555'}
         />
+        {badge !== undefined && (
+          <View style={styles.badgeContainer}>
+            <Text style={styles.badgeText}>{typeof badge === 'number' && badge > 99 ? '99+' : badge}</Text>
+          </View>
+        )}
         <Text
           style={[
             styles.tabLabel,
@@ -162,6 +169,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
               label={label as string}
               routeName={route.name}
               isFocused={isFocused}
+              badge={options.tabBarBadge as number | string}
               onPress={() => {
                 const event = navigation.emit({
                   type: 'tabPress',
@@ -260,5 +268,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 3,
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -4,
+    right: 20,
+    backgroundColor: '#FF3B30',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
