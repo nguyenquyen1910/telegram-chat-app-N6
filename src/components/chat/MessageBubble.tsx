@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MessageBubbleProps } from '@/types/chat';
 import { formatMessageTime } from '@/constants/chat';
@@ -64,6 +64,15 @@ export default function MessageBubble({
   const thumbnailUrl = isVideo
     ? message.imageUrl!.replace('/upload/', '/upload/so_0,w_400,c_fill,f_jpg/') 
     : message.imageUrl;
+
+  // Dynamic image height: giữ nguyên tỉ lệ ảnh gốc
+  const screenWidth = Dimensions.get('window').width;
+  const imageContainerWidth = screenWidth * 0.8 - 16; // 80% screen - padding
+  const imageHeight = (message.imageWidth && message.imageHeight && message.imageWidth > 0)
+    ? Math.round((imageContainerWidth * message.imageHeight) / message.imageWidth)
+    : 240; // fallback cho ảnh cũ chưa có kích thước
+  // Giới hạn chiều cao tối thiểu và tối đa
+  const clampedImageHeight = Math.max(120, Math.min(imageHeight, 400));
 
   const handleLongPress = () => {
     onLongPress?.(message);
@@ -140,6 +149,7 @@ export default function MessageBubble({
                 source={{ uri: thumbnailUrl }}
                 style={[
                   styles.image,
+                  { height: clampedImageHeight },
                   !hasText && (isOutgoing ? styles.imageOnlyOutgoing : styles.imageOnlyIncoming),
                 ]}
                 resizeMode="cover"
@@ -287,7 +297,6 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 240,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },

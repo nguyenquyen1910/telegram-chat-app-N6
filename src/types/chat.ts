@@ -52,6 +52,8 @@ export interface Message {
   imageUrl?: string;
   fileName?: string;
   fileSize?: number;
+  imageWidth?: number;
+  imageHeight?: number;
   fileThumbnail?: string;
   replyTo?: ReplyTo;
   voiceDuration?: number;
@@ -69,6 +71,8 @@ export interface UploadResult {
   url: string;
   size: number;
   publicId: string;
+  width?: number;
+  height?: number;
 }
 
 // ==================== Component Props ====================

@@ -135,6 +135,8 @@ export async function sendMessage(
     fileSize?: number;
     fileThumbnail?: string;
     replyTo?: ReplyTo;
+    imageWidth?: number;
+    imageHeight?: number;
   }
 ): Promise<string> {
   const firestore = getDb();
@@ -157,6 +159,8 @@ export async function sendMessage(
   if (extra?.fileSize) messageData.fileSize = extra.fileSize;
   if (extra?.fileThumbnail) messageData.fileThumbnail = extra.fileThumbnail;
   if (extra?.replyTo) messageData.replyTo = extra.replyTo;
+  if (extra?.imageWidth) messageData.imageWidth = extra.imageWidth;
+  if (extra?.imageHeight) messageData.imageHeight = extra.imageHeight;
 
   batch.set(messageRef, messageData);
 
