@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { AuthUser, onAuthStateChange, signOutUser, updateLastActive } from '@/services/auth';
+import { AuthUser, onAuthStateChange, signOutUser, updateLastActive, refreshAuthUser } from '@/services/auth';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -9,6 +9,8 @@ interface AuthContextType {
   isVerifying: boolean;
   setIsVerifying: (v: boolean) => void;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  updateAvatarUrl: (url: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -18,6 +20,8 @@ const AuthContext = createContext<AuthContextType>({
   isVerifying: false,
   setIsVerifying: () => {},
   logout: async () => {},
+  refreshUser: async () => {},
+  updateAvatarUrl: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -68,6 +72,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    await refreshAuthUser();
+  };
+
+  // Cập nhật avatarUrl trong AuthContext ngay lập tức (không cần đọc lại AsyncStorage)
+  const updateAvatarUrl = (url: string | null) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      return { ...prev, avatarUrl: url ?? '', photoURL: url ?? '' };
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -77,6 +93,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isVerifying,
         setIsVerifying,
         logout,
+        refreshUser,
+        updateAvatarUrl,
       }}
     >
       {children}

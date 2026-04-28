@@ -26,6 +26,7 @@ export interface AuthUser {
   phoneNumber?: string;
   email?: string;
   displayName?: string;
+  username?: string;
   photoURL?: string;
   avatarUrl?: string;
   isOnline?: boolean;
@@ -56,6 +57,12 @@ const generateAppUserId = (): string => {
 const emitAuthState = (user: AuthUser | null) => {
   cachedAuthUser = user;
   authStateListeners.forEach((listener) => listener(user));
+};
+
+// Đọc lại user từ AsyncStorage và notify tất cả listeners (dùng sau khi upload avatar)
+export const refreshAuthUser = async (): Promise<void> => {
+  const user = await readStoredAuthUser();
+  emitAuthState(user);
 };
 
 const readStoredAuthUser = async (): Promise<AuthUser | null> => {
