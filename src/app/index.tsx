@@ -13,7 +13,6 @@ export default function Index() {
     );
   }
 
-  // if authenticated → Chats, not authenticated → Welcome
   if (isAuthenticated) {
     return <Redirect href="/(tabs)/chat" />;
   }
