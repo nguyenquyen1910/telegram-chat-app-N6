@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Dimensions,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -120,6 +121,20 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const tabWidth = BAR_WIDTH / totalTabs;
   const indicatorX = useSharedValue(state.index * tabWidth);
   const indicatorY = useSharedValue(-2);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     indicatorX.value = withTiming(state.index * tabWidth, TIMING_CONFIG);
@@ -139,7 +154,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   // Ẩn tab bar khi đang ở màn hình con (không phải trang chủ của tab)
   const isChatNested = pathname.includes('/chat/') && pathname !== '/chat' && pathname !== '/chat/';
   const isSettingsNested = pathname.includes('/settings/') && pathname !== '/settings' && pathname !== '/settings/';
-  if (isChatNested || isSettingsNested) return null;
+  if (isChatNested || isSettingsNested || isKeyboardVisible) return null;
 
   return (
     <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, 8) + 4 }]}>
