@@ -5,10 +5,14 @@ import {
   getConversationsForUser,
   getUnreadCount,
 } from '@/services/chatService';
-import { getUserById } from '@/services/userService';
+import { getUserById, subscribeToUserStatus } from '@/services/userService';
+import { isUserTrulyOnline } from '@/constants/chat';
 import { ChatWithUser } from '@/components/chat-list/ChatItem';
 import { FilterTabType } from '@/components/chat-list/FilterTabs';
 import { useAuth } from '@/context/AuthContext';
+
+let cachedChats: ChatWithUser[] = [];
+let hasHydratedChatList = false;
 
 async function buildChatItems(
   conversations: Conversation[],
@@ -33,7 +37,7 @@ async function buildChatItems(
               uid: userData.uid,
               displayName: userData.displayName || userData.phoneNumber || 'User',
               avatarUrl: userData.avatarUrl || '',
-              isOnline: userData.isOnline || false,
+              isOnline: isUserTrulyOnline(userData.isOnline, userData.lastSeen),
             };
           }
         } catch (error) {
@@ -57,8 +61,8 @@ export function useChatList() {
   const { user } = useAuth();
   const currentUid = (user as any)?.uid || null;
 
-  const [chats, setChats] = useState<ChatWithUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [chats, setChats] = useState<ChatWithUser[]>(() => cachedChats);
+  const [loading, setLoading] = useState(() => !hasHydratedChatList);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTabType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,17 +74,22 @@ export function useChatList() {
       uid: string,
       mode: 'initial' | 'refresh' = 'initial'
     ) => {
+      const shouldShowLoading = mode === 'initial' && !hasHydratedChatList && cachedChats.length === 0;
       const loadId = ++latestLoadIdRef.current;
 
-      if (mode === 'initial') {
+      if (shouldShowLoading) {
         setLoading(true);
-      } else {
+      }
+
+      if (mode === 'refresh') {
         setRefreshing(true);
       }
 
       try {
         const resolvedChats = await buildChatItems(conversations, uid);
         if (loadId === latestLoadIdRef.current) {
+          cachedChats = resolvedChats;
+          hasHydratedChatList = true;
           setChats(resolvedChats);
         }
       } catch (error) {
@@ -100,6 +109,8 @@ export function useChatList() {
 
   const refreshChats = useCallback(async () => {
     if (!currentUid) {
+      cachedChats = [];
+      hasHydratedChatList = false;
       setChats([]);
       setLoading(false);
       setRefreshing(false);
@@ -118,13 +129,21 @@ export function useChatList() {
 
   useEffect(() => {
     if (!currentUid) {
+      cachedChats = [];
+      hasHydratedChatList = false;
       setChats([]);
       setLoading(false);
       setRefreshing(false);
       return;
     }
 
-    setLoading(true);
+    if (cachedChats.length > 0) {
+      setChats(cachedChats);
+      setLoading(false);
+    } else {
+      setLoading(!hasHydratedChatList);
+    }
+
     const unsubscribe = subscribeToConversations(currentUid, async (conversations) => {
       await applyConversations(conversations, currentUid);
     });
@@ -133,6 +152,38 @@ export function useChatList() {
       unsubscribe?.();
     };
   }, [applyConversations, currentUid]);
+
+  // Subscribe to realtime online status for each private chat's other user
+  const otherUserUids = useMemo(() => {
+    return chats
+      .filter(c => c.conversation.type === 'private' && c.otherUser?.uid)
+      .map(c => c.otherUser!.uid);
+  }, [chats]);
+
+  useEffect(() => {
+    if (!currentUid || otherUserUids.length === 0) return;
+
+    const unsubscribes = otherUserUids.map(uid =>
+      subscribeToUserStatus(uid, (updatedUser) => {
+        const trulyOnline = isUserTrulyOnline(updatedUser.isOnline, updatedUser.lastSeen);
+
+        const updateOnlineStatus = (list: ChatWithUser[]) =>
+          list.map(c => {
+            if (c.otherUser?.uid !== uid) return c;
+            if (c.otherUser.isOnline === trulyOnline) return c;
+            return {
+              ...c,
+              otherUser: { ...c.otherUser, isOnline: trulyOnline },
+            };
+          });
+
+        setChats(prev => updateOnlineStatus(prev));
+        cachedChats = updateOnlineStatus(cachedChats);
+      })
+    );
+
+    return () => unsubscribes.forEach(fn => fn());
+  }, [otherUserUids.join(','), currentUid]);
 
   const filteredChats = useMemo(() => {
     return chats.filter((chat) => {
@@ -168,7 +219,7 @@ export function useChatList() {
   }, [chats]);
 
   const totalUnreadCount = useMemo(() => {
-    return chats.reduce((total, chat) => total + (chat.unreadCount || 0), 0);
+    return chats.reduce((total, chat) => total + ((chat.unreadCount || 0) > 0 ? 1 : 0), 0);
   }, [chats]);
 
   return {

@@ -6,10 +6,12 @@ export interface User {
   displayName: string;
   phoneNumber: string;
   avatarUrl: string;
+  photoURL?: string;
   bio: string;
   lastSeen: Timestamp | null;
   isOnline: boolean;
   createdAt: Timestamp;
+  legacyUids?: string[];
 }
 
 // ==================== Conversation ====================
@@ -31,6 +33,7 @@ export interface Conversation {
   wallpaperId?: string;
   groupName?: string;
   groupAvatar?: string;
+  unreadCount?: Record<string, number>;
 }
 
 // ==================== Message ====================
@@ -94,6 +97,7 @@ export interface MessageBubbleProps {
   senderName?: string;
   isHighlighted?: boolean;
   currentUid?: string;
+  showSeenLabel?: boolean;
   onLongPress?: (message: Message) => void;
   onImagePress?: (imageUrl: string) => void;
   onFilePress?: (fileUrl: string, fileName: string) => void;

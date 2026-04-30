@@ -16,6 +16,7 @@ import {
   DocumentSnapshot,
   QueryDocumentSnapshot,
   updateDoc,
+  increment,
   arrayUnion,
   arrayRemove,
   deleteField,
@@ -201,6 +202,16 @@ export async function sendMessage(
   batch.set(messageRef, messageData);
 
   const convRef = doc(firestore, 'conversations', conversationId);
+  const convSnap = await getDoc(convRef);
+  const participants = ((convSnap.data()?.participants as string[] | undefined) || []);
+  const unreadUpdate: Record<string, unknown> = {};
+
+  participants.forEach((uid) => {
+    if (uid !== senderId) {
+      unreadUpdate[`unreadCount.${uid}`] = increment(1);
+    }
+  });
+
   batch.update(convRef, {
     lastMessage: {
       text: type === 'image' ? (text ? `📷 ${text}` : '📷 Ảnh') : text,
@@ -209,6 +220,7 @@ export async function sendMessage(
       type,
     },
     updatedAt: serverTimestamp(),
+    ...unreadUpdate,
   });
 
   await batch.commit();
@@ -325,16 +337,27 @@ export async function markMessagesAsRead(
 
 export async function getUnreadCount(conversationId: string, currentUid: string): Promise<number> {
   const firestore = getDb();
+  const convRef = doc(firestore, 'conversations', conversationId);
+  const convSnap = await getDoc(convRef);
+
+  if (!convSnap.exists()) return 0;
+
+  const conversation = convSnap.data() as Conversation;
+  const lastReadAt = conversation.lastReadBy?.[currentUid];
   const messagesRef = collection(firestore, 'conversations', conversationId, 'messages');
-  
-  const q = query(
-    messagesRef,
-    where('status', 'in', ['sending', 'sent', 'delivered'])
-  );
+
+  const q = lastReadAt
+    ? query(messagesRef, where('createdAt', '>', lastReadAt), orderBy('createdAt', 'asc'))
+    : query(messagesRef, orderBy('createdAt', 'asc'));
 
   const snapshot = await getDocs(q);
-  // Count messages where sender is NOT the current user
-  return snapshot.docs.filter(doc => doc.data().senderId !== currentUid).length;
+  return snapshot.docs.filter((docSnap) => {
+    const data = docSnap.data() as Message;
+    if (data.senderId === currentUid) return false;
+    if (data.isRevoked) return false;
+    if (data.deletedFor?.includes(currentUid)) return false;
+    return true;
+  }).length;
 }
 
 export async function getMediaMessages(conversationId: string, currentUid: string): Promise<Message[]> {
@@ -438,6 +461,7 @@ export async function markConversationAsRead(
     const convRef = doc(firestore, 'conversations', conversationId);
     await updateDoc(convRef, {
       [`lastReadBy.${uid}`]: serverTimestamp(),
+      [`unreadCount.${uid}`]: 0,
     });
   } catch (error) {
     console.warn('[ChatService] markConversationAsRead error:', error);

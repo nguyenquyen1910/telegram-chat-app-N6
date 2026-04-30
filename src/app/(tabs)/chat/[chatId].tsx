@@ -15,7 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import * as Clipboard from 'expo-clipboard';
 import { Message } from '@/types/chat';
-import { formatLastSeen } from '@/constants/chat';
+import { formatLastSeen, isUserTrulyOnline } from '@/constants/chat';
 import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
@@ -35,6 +35,7 @@ import DateSeparator from '@/components/chat/DateSeparator';
 import PromptModal from '@/components/chat/PromptModal';
 import { getUserByPhone } from '@/services/userService';
 import { addMemberToGroup, leaveGroupConversation, updateGroupAvatar, updateGroupName } from '@/services/chatService';
+import { getComputedMessageStatus, shouldMarkConversationRead } from '@/services/chatReadState';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '@/services/mediaService';
 
@@ -69,13 +70,13 @@ export default function ChatDetailScreen() {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [initialLastRead, setInitialLastRead] = useState<Timestamp | null>(null);
-  const [hasMarkedRead, setHasMarkedRead] = useState(false);
   // Search state
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResultIndex, setSearchResultIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrolledToInitial = useRef(false);
+  const lastMarkedMessageIdRef = useRef<string | null>(null);
 
   // Group features state
   const [showAddMemberPrompt, setShowAddMemberPrompt] = useState(false);
@@ -221,11 +222,20 @@ export default function ChatDetailScreen() {
 
   // Mark conversation as read khi mở chat
   useEffect(() => {
-    if (chatId && currentUid && !loading && messages.length > 0 && !hasMarkedRead) {
-      markConversationAsRead(chatId, currentUid);
-      setHasMarkedRead(true);
+    if (!shouldMarkConversationRead({ chatId, currentUid, loading, messageCount: messages.length })) {
+      return;
     }
-  }, [chatId, currentUid, loading, messages.length, hasMarkedRead]);
+
+    const latestMessageId = messages[messages.length - 1]?.id || null;
+    if (!latestMessageId || lastMarkedMessageIdRef.current === latestMessageId) {
+      return;
+    }
+
+    if (chatId && currentUid) {
+      markConversationAsRead(chatId, currentUid);
+      lastMarkedMessageIdRef.current = latestMessageId;
+    }
+  }, [chatId, currentUid, loading, messages]);
 
   // Tìm otherUid
   const otherUid = useMemo(() => {
@@ -233,27 +243,16 @@ export default function ChatDetailScreen() {
     return conversation.participants.find((uid) => uid !== currentUid) || null;
   }, [conversation, currentUid]);
 
-  // Tính toán read status cho outgoing messages dựa trên lastReadBy[otherUid]
-  const getComputedStatus = useCallback(
-    (msg: Message): Message['status'] => {
-      // Chỉ tính cho outgoing messages
-      if (msg.senderId !== currentUid) return msg.status;
-      if (msg.status === 'sending') return 'sending';
-
-      // So sánh lastReadBy[otherUid] với message.createdAt
-      if (otherUid && lastReadBy && lastReadBy[otherUid]) {
-        const otherReadAt = lastReadBy[otherUid];
-        const msgTime = msg.createdAt;
-        if (msgTime && otherReadAt) {
-          const msgMs = msgTime.toMillis?.() || 0;
-          const readMs = otherReadAt.toMillis?.() || 0;
-          if (readMs >= msgMs) return 'read';
-        }
+  const latestOutgoingMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const message = messages[i];
+      if (message.senderId === currentUid && !message.isRevoked) {
+        return message.id;
       }
-      return 'sent';
-    },
-    [currentUid, otherUid, lastReadBy]
-  );
+    }
+
+    return null;
+  }, [messages, currentUid]);
 
   // Build danh sách items: messages + unread separator + date separator
   const listItems: ListItem[] = useMemo(() => {
@@ -299,12 +298,12 @@ export default function ChatDetailScreen() {
       items.push({
         id: msg.id,
         type: 'message',
-        message: { ...msg, status: getComputedStatus(msg) },
+        message: msg,
       });
     }
 
     return items;
-  }, [messages, currentUid, initialLastRead, getComputedStatus]);
+  }, [messages, currentUid, initialLastRead]);
 
   // Dữ liệu đảo ngược cho inverted FlatList (mới nhất ở đầu)
   const invertedItems = useMemo(() => [...listItems].reverse(), [listItems]);
@@ -478,13 +477,29 @@ export default function ChatDetailScreen() {
 
       if (!item.message) return null;
 
+      const computedStatus = getComputedMessageStatus({
+        message: item.message,
+        currentUid,
+        otherUid,
+        lastReadBy,
+      });
+      const renderedMessage =
+        item.message.status === computedStatus
+          ? item.message
+          : { ...item.message, status: computedStatus };
+      const showSeenLabel =
+        renderedMessage.senderId === currentUid &&
+        renderedMessage.status === 'read' &&
+        renderedMessage.id === latestOutgoingMessageId;
+
       return (
         <MessageBubble
-          message={item.message}
-          isOutgoing={isOutgoing(item.message)}
+          message={renderedMessage}
+          isOutgoing={isOutgoing(renderedMessage)}
           senderName={otherUser?.displayName}
           isHighlighted={item.id === highlightedMessageId}
           currentUid={currentUid || undefined}
+          showSeenLabel={showSeenLabel}
           onLongPress={(msg) => setSelectedMessage(msg)}
           onImagePress={(url) => setMediaViewerUrl(url)}
           onFilePress={(url, name) => {
@@ -494,7 +509,7 @@ export default function ChatDetailScreen() {
         />
       );
     },
-    [isOutgoing, otherUser, highlightedMessageId, currentUid]
+    [isOutgoing, otherUser, highlightedMessageId, currentUid, otherUid, lastReadBy, latestOutgoingMessageId]
   );
 
   // Detect media type for viewer
@@ -555,8 +570,8 @@ export default function ChatDetailScreen() {
           <ChatHeader
             userName={otherUser?.displayName || 'User'}
             userAvatar={otherUser?.avatarUrl || ''}
-            lastSeen={formatLastSeen(otherUser?.lastSeen || null, otherUser?.isOnline || false)}
-            isOnline={otherUser?.isOnline || false}
+            lastSeen={formatLastSeen(otherUser?.lastSeen || null, isUserTrulyOnline(otherUser?.isOnline || false, otherUser?.lastSeen || null))}
+            isOnline={isUserTrulyOnline(otherUser?.isOnline || false, otherUser?.lastSeen || null)}
             isGroup={false}
             onBackPress={() => router.back()}
             onProfilePress={() =>

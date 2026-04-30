@@ -14,6 +14,7 @@ export default function MessageBubble({
   senderName,
   isHighlighted,
   currentUid,
+  showSeenLabel,
   onLongPress,
   onImagePress,
   onFilePress,
@@ -211,6 +212,8 @@ export default function MessageBubble({
             })}
           </View>
         )}
+
+        {isOutgoing && showSeenLabel && <Text style={styles.seenLabel}>Đã xem</Text>}
       </View>
     </View>
   );
@@ -404,6 +407,14 @@ const styles = StyleSheet.create({
   reactionsRowIncoming: {
     alignSelf: 'flex-end',
     marginRight: 4,
+  },
+  seenLabel: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    marginRight: 4,
+    fontSize: 11,
+    color: '#5F9B63',
+    fontWeight: '500',
   },
   reactionBadge: {
     flexDirection: 'row',

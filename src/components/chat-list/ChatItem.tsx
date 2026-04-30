@@ -27,6 +27,7 @@ interface ChatItemProps {
 export const ChatItem = React.memo(({ chat, currentUid, onPress, isMuted = false }: ChatItemProps) => {
   const { conversation, otherUser, unreadCount = 0 } = chat;
   const isGroup = conversation.type === 'group';
+  const hasUnread = unreadCount > 0 && !isMuted;
 
   // Determine avatar and name
   const name = isGroup 
@@ -71,7 +72,7 @@ export const ChatItem = React.memo(({ chat, currentUid, onPress, isMuted = false
               {isGroup && (
                 <Ionicons name="people" size={16} color="#8E8E93" style={styles.groupIcon} />
               )}
-              <Text style={styles.name} numberOfLines={1}>
+              <Text style={[styles.name, hasUnread && styles.nameUnread]} numberOfLines={1}>
                 {name}
               </Text>
               {isMuted && (
@@ -80,7 +81,7 @@ export const ChatItem = React.memo(({ chat, currentUid, onPress, isMuted = false
             </View>
             
             {lastMsg?.timestamp && (
-              <Text style={[styles.time, unreadCount > 0 && !isMuted ? styles.timeUnread : null]}>
+              <Text style={[styles.time, hasUnread && styles.timeUnread]}>
                 {(() => { try { return formatChatListTime(lastMsg.timestamp); } catch { return ''; } })()}
               </Text>
             )}
@@ -97,7 +98,7 @@ export const ChatItem = React.memo(({ chat, currentUid, onPress, isMuted = false
                 />
               )}
               {lastMsgPrefix}
-              <Text style={styles.lastMsg} numberOfLines={2}>
+              <Text style={[styles.lastMsg, hasUnread && styles.lastMsgUnread]} numberOfLines={2}>
                 {lastMsgText}
               </Text>
             </View>
@@ -154,6 +155,9 @@ const styles = StyleSheet.create({
     color: '#000000',
     flexShrink: 1,
   },
+  nameUnread: {
+    fontWeight: '700',
+  },
   time: {
     fontSize: 14,
     color: '#8E8E93',
@@ -176,6 +180,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#8E8E93',
     lineHeight: 20,
+  },
+  lastMsgUnread: {
+    color: '#000000',
+    fontWeight: '500',
   },
   badgeContainer: {
     paddingTop: 2,

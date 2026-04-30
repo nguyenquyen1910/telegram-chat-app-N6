@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { AuthUser, onAuthStateChange, signOutUser, updateLastActive, refreshAuthUser, changePhoneNumber } from '@/services/auth';
+import { AuthUser, onAuthStateChange, signOutUser, updateLastActive, refreshAuthUser } from '@/services/auth';
+import { updateUserStatus } from '@/services/userService';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -41,15 +42,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
-  // Update lastActive when app becomes active or goes to background
+  // Set ONLINE when user first mounts (app just opened)
+  useEffect(() => {
+    if (user) {
+      updateUserStatus(user.uid, true).catch(console.warn);
+    }
+  }, [user]);
+
+  // Update online status when app becomes active or goes to background
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (user) {
         if (nextState === 'active') {
-          // App came to foreground → update lastActive
+          // App came to foreground → set ONLINE
+          updateUserStatus(user.uid, true).catch(console.warn);
           updateLastActive();
         } else if (appState.current === 'active' && nextState.match(/inactive|background/)) {
-          // App going to background → save lastActive timestamp
+          // App going to background → set OFFLINE
+          updateUserStatus(user.uid, false).catch(console.warn);
           updateLastActive();
         }
       }
@@ -60,16 +70,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [user]);
 
-  // Periodic update every 60s while app is active
+  // Heartbeat: update every 50s while app is active (< 90s offline threshold)
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
+      updateUserStatus(user.uid, true).catch(console.warn);
       updateLastActive();
-    }, 60 * 1000);
+    }, 50 * 1000);
     return () => clearInterval(interval);
   }, [user]);
 
   const logout = async () => {
+    // Set OFFLINE before signing out
+    if (user) {
+      await updateUserStatus(user.uid, false).catch(console.warn);
+    }
     await signOutUser();
     setUser(null);
   };

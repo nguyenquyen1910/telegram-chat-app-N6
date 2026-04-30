@@ -19,12 +19,18 @@ function getDb() {
   return db;
 }
 
-function mapUserDoc(docSnap: { id: string; data: () => unknown }): User {
-  const data = docSnap.data() as Record<string, unknown>;
+function normalizeUser(docId: string, raw: any): User {
   return {
-    ...data,
-    uid: docSnap.id,
-    avatarUrl: (data.photoURL || '') as string,
+    uid: docId,
+    displayName: raw.displayName || '',
+    phoneNumber: raw.phoneNumber || '',
+    avatarUrl: raw.avatarUrl || raw.photoURL || '',
+    photoURL: raw.photoURL || raw.avatarUrl || '',
+    bio: raw.bio || '',
+    lastSeen: raw.lastSeen || null,
+    isOnline: !!raw.isOnline,
+    createdAt: raw.createdAt,
+    legacyUids: Array.isArray(raw.legacyUids) ? raw.legacyUids : [],
   } as User;
 }
 
@@ -33,8 +39,17 @@ export async function getUserById(uid: string): Promise<User | null> {
   const docRef = doc(firestore, 'users', uid);
   const docSnap = await getDoc(docRef);
 
-  if (!docSnap.exists()) return null;
-  return mapUserDoc(docSnap);
+  if (docSnap.exists()) {
+    return normalizeUser(docSnap.id, docSnap.data());
+  }
+
+  const usersRef = collection(firestore, 'users');
+  const legacyQuery = query(usersRef, where('legacyUids', 'array-contains', uid), limit(1));
+  const legacySnap = await getDocs(legacyQuery);
+  if (legacySnap.empty) return null;
+
+  const legacyDoc = legacySnap.docs[0];
+  return normalizeUser(legacyDoc.id, legacyDoc.data());
 }
 
 export async function createOrUpdateUser(user: Partial<User> & { uid: string }): Promise<void> {
@@ -71,7 +86,7 @@ export function subscribeToUserStatus(
   const docRef = doc(firestore, 'users', uid);
   return onSnapshot(docRef, (docSnap) => {
     if (docSnap.exists()) {
-      callback(mapUserDoc(docSnap));
+      callback(normalizeUser(docSnap.id, docSnap.data()));
     }
   });
 }
@@ -84,5 +99,5 @@ export async function getUserByPhone(phoneNumber: string): Promise<User | null> 
 
   if (snapshot.empty) return null;
   const docSnap = snapshot.docs[0];
-  return mapUserDoc(docSnap);
+  return normalizeUser(docSnap.id, docSnap.data());
 }
