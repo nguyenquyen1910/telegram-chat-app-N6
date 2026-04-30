@@ -28,6 +28,20 @@ export function formatMessageTime(timestamp: Timestamp): string {
   return `${hours}:${minutes}`;
 }
 
+// Threshold to consider user offline if heartbeat missed (app crash/kill)
+const ONLINE_TIMEOUT_MS = 90 * 1000; // 90 seconds
+
+/**
+ * Guard against stale online status.
+ * If isOnline is true but lastSeen is older than 90s, consider user offline.
+ */
+export function isUserTrulyOnline(isOnline: boolean, lastSeen: Timestamp | null): boolean {
+  if (!isOnline) return false;
+  if (!lastSeen) return false;
+  const elapsed = Date.now() - lastSeen.toMillis();
+  return elapsed < ONLINE_TIMEOUT_MS;
+}
+
 export function formatLastSeen(timestamp: Timestamp | null, isOnline: boolean): string {
   if (isOnline) return 'trực tuyến';
   if (!timestamp) return 'truy cập gần đây';
