@@ -14,6 +14,7 @@ import { loadProfile, saveProfile, formatBirthday, Birthday } from '@/services/p
 import DateWheelPicker from '@/components/DateWheelPicker';
 import { signOutUser } from '@/services/auth';
 import { useRouter } from 'expo-router';
+import { formatPhoneNumber } from '@/utils/format';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
@@ -37,7 +38,7 @@ export default function EditProfileScreen() {
 
   // userAvatar: local preview khi đang upload, sau đó dùng user.avatarUrl (AuthContext)
   const userAvatar = localAvatar || user?.avatarUrl || user?.photoURL || null;
-  const userPhone = user?.phoneNumber || '';
+  const userPhone = formatPhoneNumber(user?.phoneNumber || '');
 
   // Đọc profile data từ cache
   useEffect(() => {
@@ -139,10 +140,10 @@ export default function EditProfileScreen() {
     if (user?.uid) {
       await saveProfile(user.uid, { username, bio, birthday });
     }
-    navigation.goBack();
+    router.replace('/(tabs)/settings');
   };
 
-  const handleCancel = () => navigation.goBack();
+  const handleCancel = () => router.replace('/(tabs)/settings');
 
   const confirmLogout = async () => {
     setIsLoggingOut(true);
@@ -271,13 +272,17 @@ export default function EditProfileScreen() {
 
             {/* ── Info rows ───────────────────────────────── */}
             <View style={[s.card, { marginTop: 20 }]}>
-              <View style={s.infoRow}>
+              <TouchableOpacity
+                style={s.infoRow}
+                activeOpacity={0.6}
+                onPress={() => router.push('/(tabs)/settings/change-phone')}
+              >
                 <Text style={s.infoLabel}>Đổi số</Text>
                 <View style={s.infoTrail}>
                   <Text style={s.infoValue}>{userPhone}</Text>
                   <Ionicons name="chevron-forward" size={17} color="rgba(60,60,67,0.3)" />
                 </View>
-              </View>
+              </TouchableOpacity>
               <View style={s.sep} />
               <View style={s.infoRow}>
                 <Text style={s.infoLabel}>Tên người dùng</Text>

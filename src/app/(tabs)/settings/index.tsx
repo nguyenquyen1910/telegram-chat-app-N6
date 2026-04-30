@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
-  Image, Animated, Dimensions, Platform, PanResponder, Modal, Alert, ActivityIndicator,
+  Image, Animated, Dimensions, Platform, PanResponder, Modal, Alert, ActivityIndicator, RefreshControl
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
 import { loadProfile } from '@/services/profileService';
 import { uploadAvatar, removeAvatar } from '@/services/avatarService';
+import { formatPhoneNumber } from '@/utils/format';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 83;
@@ -58,7 +59,7 @@ export default function SettingsScreen() {
   const [uploading, setUploading] = useState(false);
 
   const profileName = user?.displayName || 'User';
-  const profilePhone = user?.phoneNumber || '';
+  const profilePhone = formatPhoneNumber(user?.phoneNumber || '');
   const profileAvatar = user?.avatarUrl || user?.photoURL || null;
   const subLine = [profilePhone, username ? `@${username}` : ''].filter(Boolean).join(' • ');
 
@@ -149,6 +150,21 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         bounces
+        refreshControl={
+          Platform.OS === 'android' ? (
+            <RefreshControl
+              refreshing={false}
+              onRefresh={() => {
+                if (!expanded) doExpand();
+              }}
+              colors={['transparent']}
+              progressBackgroundColor="transparent"
+              tintColor="transparent"
+              // Đẩy cái vòng xoay load trang lùi tuốt lên trên khỏi màn hình để ẩn hoàn toàn
+              progressViewOffset={-200}
+            />
+          ) : undefined
+        }
         // Detect pull-down: khi kéo xuống tại đầu trang
         onScrollBeginDrag={(e) => { scrollStartYRef.current = e.nativeEvent.contentOffset.y; }}
         onScrollEndDrag={(e) => {

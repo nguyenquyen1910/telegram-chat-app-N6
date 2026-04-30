@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { AuthUser, onAuthStateChange, signOutUser, updateLastActive, refreshAuthUser } from '@/services/auth';
+import { AuthUser, onAuthStateChange, signOutUser, updateLastActive, refreshAuthUser, changePhoneNumber } from '@/services/auth';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -11,6 +11,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateAvatarUrl: (url: string | null) => void;
+  updatePhoneNumber: (phone: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   refreshUser: async () => {},
   updateAvatarUrl: () => {},
+  updatePhoneNumber: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -84,6 +86,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // Cập nhật số điện thoại trong AuthContext ngay lập tức
+  const updatePhoneNumber = (phone: string) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      return { ...prev, phoneNumber: phone };
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -95,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         refreshUser,
         updateAvatarUrl,
+        updatePhoneNumber,
       }}
     >
       {children}

@@ -35,6 +35,8 @@ function WheelColumn({ items, selectedIndex, onSelect, flex = 1 }: ColumnProps) 
       snapToInterval={ITEM_H}
       decelerationRate="fast"
       showsVerticalScrollIndicator={false}
+      nestedScrollEnabled={true}
+      scrollEnabled={true}
       contentContainerStyle={{ paddingVertical: ITEM_H * 2 }}
       onMomentumScrollEnd={(e) => {
         const raw = Math.round(e.nativeEvent.contentOffset.y / ITEM_H);
@@ -103,7 +105,6 @@ const s = StyleSheet.create({
   container: {
     flexDirection: 'row',
     height: ITEM_H * VISIBLE,
-    overflow: 'hidden',
   },
   highlight: {
     position: 'absolute',
