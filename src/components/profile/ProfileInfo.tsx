@@ -35,7 +35,10 @@ export default function ProfileInfo({ phoneNumber, bio, username }: ProfileInfoP
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
-    marginTop: 0,
+    marginTop: 8,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   infoRow: {
     paddingHorizontal: 16,

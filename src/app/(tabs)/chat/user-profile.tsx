@@ -48,7 +48,7 @@ const TABS: TabType[] = ['Media', 'File', 'Link'];
 // ==================== Component ====================
 export default function UserProfileScreen() {
   const router = useRouter();
-  const { userId, conversationId } = useLocalSearchParams<{ userId: string; conversationId: string }>();
+  const { userId, conversationId, callDate, callType } = useLocalSearchParams<{ userId: string; conversationId: string; callDate?: string; callType?: string }>();
   const { user: currentUser } = useAuth();
   const currentUid = (currentUser as any)?.uid || null;
 
@@ -149,6 +149,16 @@ export default function UserProfileScreen() {
   const avatarUrl = user?.avatarUrl || '';
   const statusText = formatLastSeen(user?.lastSeen || null, user?.isOnline || false);
 
+  // Call history format
+  let formattedCallDate = '';
+  let formattedCallTime = '';
+  if (callDate) {
+    const d = new Date(callDate);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    formattedCallDate = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    formattedCallTime = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  }
+
   // ==================== Render ====================
   return (
     <View style={st.container}>
@@ -164,27 +174,43 @@ export default function UserProfileScreen() {
         bounces={false}
       >
         <ProfileActions onMessage={() => router.back()} onMute={() => {}} onCall={() => {}} onVideoCall={() => {}} />
+
+        {/* Khối hiển thị lịch sử cuộc gọi (chỉ có khi đi từ tab Calls) */}
+        {callDate && (
+          <View style={st.callHistoryCard}>
+            <Text style={st.callDateText}>{formattedCallDate}</Text>
+            <View style={st.callTimeRow}>
+              <Text style={st.callTimeText}>{formattedCallTime}</Text>
+              <Text style={st.callTypeText}>{callType}</Text>
+            </View>
+          </View>
+        )}
+
         <ProfileInfo phoneNumber={user?.phoneNumber || ''} bio={user?.bio || ''} />
 
-        {/* Tab bar */}
-        <View style={st.tabBarWrap}>
-          <View style={st.tabBar}>
-            {TABS.map((tab) => (
-              <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={[st.tabItem, activeTab === tab && st.tabItemActive]} activeOpacity={0.7}>
-                <Text style={[st.tabText, activeTab === tab && st.tabTextActive]}>{tab}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        {/* Tab bar (Ẩn đi nếu đi từ màn hình cuộc gọi, giống như thiết kế Telegram) */}
+        {!callDate && (
+          <>
+            <View style={st.tabBarWrap}>
+              <View style={st.tabBar}>
+                {TABS.map((tab) => (
+                  <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={[st.tabItem, activeTab === tab && st.tabItemActive]} activeOpacity={0.7}>
+                    <Text style={[st.tabText, activeTab === tab && st.tabTextActive]}>{tab}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-        <View style={st.tabContent}>
-          {loadingTab
-            ? <View style={st.loadingWrap}><ActivityIndicator size="large" color="#50A8EB" /></View>
-            : activeTab === 'Media' ? <MediaGrid messages={mediaMessages} onImagePress={openMedia} />
-            : activeTab === 'File' ? <FileList messages={fileMessages} onFilePress={openFile} />
-            : <LinkList messages={linkMessages} />
-          }
-        </View>
+            <View style={st.tabContent}>
+              {loadingTab
+                ? <View style={st.loadingWrap}><ActivityIndicator size="large" color="#50A8EB" /></View>
+                : activeTab === 'Media' ? <MediaGrid messages={mediaMessages} onImagePress={openMedia} />
+                : activeTab === 'File' ? <FileList messages={fileMessages} onFilePress={openFile} />
+                : <LinkList messages={linkMessages} />
+              }
+            </View>
+          </>
+        )}
       </Animated.ScrollView>
 
       {/* ANIMATED HEADER */}
@@ -273,4 +299,32 @@ const st = StyleSheet.create({
 
   tabContent: { backgroundColor: '#FFF', minHeight: SCREEN_HEIGHT },
   loadingWrap: { paddingVertical: 64, alignItems: 'center' },
+
+  callHistoryCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+  },
+  callDateText: {
+    fontSize: 16,
+    color: '#000',
+    marginBottom: 8,
+  },
+  callTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  callTimeText: {
+    fontSize: 15,
+    color: '#000',
+  },
+  callTypeText: {
+    fontSize: 15,
+    color: '#000',
+    fontWeight: '500',
+  },
 });

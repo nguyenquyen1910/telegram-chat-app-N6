@@ -1,100 +1,235 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { TelegramColors } from '@/constants/colors';
+import React, { useState, useCallback, useRef } from "react";
+import { View, Text, FlatList, StyleSheet, StatusBar, TouchableOpacity, RefreshControl, Animated, LayoutChangeEvent } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useCallHistory } from "@/hooks/useCallHistory";
+import { CallRecordWithDirection } from "@/types/call";
+import { TelegramColors } from "@/constants/colors";
+import CallListItem from "./CallListItem";
+import { useRouter } from "expo-router";
 
 export default function CallsScreen() {
-  const handleAddCallPress = () => {
-    console.log('Add call pressed');
-  };
+  const { calls, isLoading } = useCallHistory();
+  const router = useRouter();
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'missed'>('all');
+
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [segmentWidth, setSegmentWidth] = useState(0);
+
+  const switchFilter = useCallback((next: 'all' | 'missed') => {
+    setFilter(next);
+    Animated.spring(slideAnim, {
+      toValue: next === 'all' ? 0 : segmentWidth,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 4,
+    }).start();
+  }, [segmentWidth, slideAnim]);
+
+  const handleSegmentLayout = useCallback((e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    setSegmentWidth((w - 6) / 2);
+  }, []);
+
+  const filteredCalls = calls.filter(c => filter === 'all' ? true : c.status === 'missed');
+
+  const handleItemPress = useCallback((call: CallRecordWithDirection) => {
+    console.log("[Calls] Call back to", call.otherUserId);
+  }, []);
+
+  const handleInfoPress = useCallback((call: CallRecordWithDirection) => {
+    router.push({
+      pathname: '/(tabs)/chat/user-profile',
+      params: { 
+        userId: call.otherUserId,
+        callDate: call.createdAt?.toDate ? call.createdAt.toDate().toISOString() : String(call.createdAt),
+        callType: call.direction === 'outgoing' ? 'Outgoing Call' : (call.status === 'missed' ? 'Missed Call' : 'Incoming Call')
+      }
+    });
+  }, [router]);
+
+  const handleDeletePress = useCallback((call: CallRecordWithDirection) => {
+    console.log("[Calls] Delete call", call.id);
+  }, []);
+
+  const handleVoiceCall = useCallback((call: CallRecordWithDirection) => {
+    console.log("[Calls] Voice call to", call.otherUserId);
+  }, []);
+
+  const handleVideoCall = useCallback((call: CallRecordWithDirection) => {
+    console.log("[Calls] Video call to", call.otherUserId);
+  }, []);
+
+  const renderSeparator = () => (
+    <View style={{ height: 0.5, backgroundColor: "#E5E5E5", marginLeft: 76 }} />
+  );
+
+  const renderHeader = () => (
+    <View style={styles.listHeader}>
+      <TouchableOpacity style={styles.newCallBtn} onPress={() => console.log('Start new call')}>
+        <Ionicons name="call-outline" size={24} color="#54A5E8" />
+        <Text style={styles.newCallText}>Start New Call</Text>
+      </TouchableOpacity>
+      <Text style={styles.sectionTitle}>RECENT CALLS</Text>
+    </View>
+  );
 
   return (
     <View style={styles.fullContainer}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F7F7F7" />
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
         <View style={styles.header}>
-          <View style={styles.leftSpacer} />
-
-          <Text style={styles.headerTitle}>Cuộc gọi</Text>
-
-          <TouchableOpacity onPress={handleAddCallPress} style={styles.addButton}>
-            <Ionicons name="add-circle-outline" size={28} color={TelegramColors.primary} />
+          <TouchableOpacity style={styles.pillBtn} onPress={() => setIsEditing(!isEditing)}>
+            <Text style={[styles.pillText, isEditing && {fontWeight: '600'}]}>
+              {isEditing ? "Done" : "Edit"}
+            </Text>
           </TouchableOpacity>
+
+          <View style={styles.segmentedControl} onLayout={handleSegmentLayout}>
+            <Animated.View
+              style={[
+                styles.slidingPill,
+                { transform: [{ translateX: slideAnim }] },
+              ]}
+            />
+            <TouchableOpacity
+              style={styles.segment}
+              activeOpacity={0.8}
+              onPress={() => switchFilter('all')}>
+              <Text style={[styles.segmentText, filter === 'all' && styles.segmentTextActive]}>All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.segment}
+              activeOpacity={0.8}
+              onPress={() => switchFilter('missed')}>
+              <Text style={[styles.segmentText, filter === 'missed' && styles.segmentTextActive]}>Missed</Text>
+            </TouchableOpacity>
+          </View>
+
+          {isEditing ? (
+            <TouchableOpacity style={styles.pillBtn} onPress={() => console.log('Delete all')}>
+              <Text style={styles.pillText}>Delete All</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ minWidth: 60 }} />
+          )}
         </View>
 
-        <View style={styles.contentArea}>
-          <View style={styles.emptyState}>
-            <Ionicons name="call-outline" size={64} color="#CCCCCC" />
-            <Text style={styles.emptyText}>Lịch sử cuộc gọi sẽ hiển thị ở đây</Text>
-            <Text style={styles.emptySubtext}>Chưa có cuộc gọi nào</Text>
-          </View>
-        </View>
+        <FlatList
+          data={filteredCalls}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <CallListItem
+              call={item}
+              isEditing={isEditing}
+              onPress={handleItemPress}
+              onInfoPress={handleInfoPress}
+              onDeletePress={handleDeletePress}
+            />
+          )}
+          ItemSeparatorComponent={renderSeparator}
+          ListHeaderComponent={renderHeader}
+          refreshControl={<RefreshControl refreshing={isLoading} colors={[TelegramColors.primary]} />}
+          ListEmptyComponent={
+            !isLoading ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="call-outline" size={64} color="#CCCCCC" />
+                <Text style={styles.emptyText}>No recent calls</Text>
+              </View>
+            ) : null
+          }
+          style={styles.list}
+        />
       </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  fullContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F7F7F7',
-  },
+  fullContainer: { flex: 1, backgroundColor: "#FFFFFF" },
+  safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 0,
-    backgroundColor: '#F7F7F7',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#E5E5E5',
-    height: 44,
-  },
-  leftSpacer: {
-    width: 32,
-    height: 32,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#000000',
-    flex: 1,
-    textAlign: 'center',
-    position: 'absolute',
-    left: 0,
-    right: 0,
-  },
-  addButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
     zIndex: 10,
   },
-  contentArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
+  pillBtn: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    // CSS Shadow mô phỏng từ Tabbar
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    minWidth: 60,
     alignItems: 'center',
-    paddingHorizontal: 32,
+    justifyContent: 'center',
   },
-  emptyText: {
-    fontSize: 18,
-    color: '#666666',
-    marginTop: 16,
-    textAlign: 'center',
+  pillText: { fontSize: 15, color: "#000000" },
+  segmentedControl: {
+    flexDirection: "row",
+    backgroundColor: "#F2F2F2",
+    borderRadius: 20,
+    padding: 3,
+    // CSS Shadow mô phỏng từ Tabbar
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999999',
-    marginTop: 8,
-    textAlign: 'center',
+  segment: {
+    width: 80,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,   // chữ hiện trên pill
   },
+  slidingPill: {
+    position: 'absolute',
+    top: 3,
+    bottom: 3,
+    left: 3,
+    width: '50%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentText: { fontSize: 14, color: "#000000", fontWeight: '500' },
+  segmentTextActive: { fontWeight: "600", color: "#54A5E8" },
+  listHeader: { backgroundColor: "#FFFFFF" },
+  newCallBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  newCallText: { fontSize: 16, color: "#54A5E8", fontWeight: "400" },
+  sectionTitle: {
+    fontSize: 13,
+    color: "#8E8E93",
+    fontWeight: "500",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#F7F7F7",
+  },
+  list: { flex: 1, backgroundColor: "#FFFFFF" },
+  emptyState: { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 60 },
+  emptyText: { fontSize: 16, color: "#666666", marginTop: 12 },
 });
