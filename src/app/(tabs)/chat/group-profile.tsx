@@ -22,12 +22,10 @@ import Animated, {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
-import { formatLastSeen } from '@/constants/chat';
-import { Message, User } from '@/types/chat';
-import { getUserById } from '@/services/userService';
-import { getMediaMessages, getFileMessages, getLinkMessages } from '@/services/chatService';
+import { Message, Conversation } from '@/types/chat';
+import { getConversation, getMediaMessages, getFileMessages, getLinkMessages } from '@/services/chatService';
 import ProfileActions from '@/components/profile/ProfileActions';
-import ProfileInfo from '@/components/profile/ProfileInfo';
+import GroupMembersList from '@/components/profile/GroupMembersList';
 import MediaGrid from '@/components/profile/MediaGrid';
 import FileList from '@/components/profile/FileList';
 import LinkList from '@/components/profile/LinkList';
@@ -46,15 +44,15 @@ type TabType = 'Media' | 'File' | 'Link';
 const TABS: TabType[] = ['Media', 'File', 'Link'];
 
 // ==================== Component ====================
-export default function UserProfileScreen() {
+export default function GroupProfileScreen() {
   const router = useRouter();
-  const { userId, conversationId } = useLocalSearchParams<{ userId: string; conversationId: string }>();
+  const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
   const { user: currentUser } = useAuth();
   const currentUid = (currentUser as any)?.uid || null;
 
   // State
   const [activeTab, setActiveTab] = useState<TabType>('Media');
-  const [user, setUser] = useState<User | null>(null);
+  const [conversation, setConversation] = useState<Conversation | null>(null);
   const [mediaMessages, setMediaMessages] = useState<Message[]>([]);
   const [fileMessages, setFileMessages] = useState<Message[]>([]);
   const [linkMessages, setLinkMessages] = useState<Message[]>([]);
@@ -72,7 +70,6 @@ export default function UserProfileScreen() {
     onEndDrag: (e) => {
       'worklet';
       const y = e.contentOffset.y;
-      // Snap: in transition zone → collapse or expand
       if (y > 0 && y < SCROLL_DIST) {
         scrollTo(scrollRef, 0, y > SCROLL_DIST * 0.3 ? SCROLL_DIST : 0, true);
       }
@@ -86,11 +83,11 @@ export default function UserProfileScreen() {
     },
   });
 
-  // Load user
+  // Load conversation
   useEffect(() => {
-    if (!userId) return;
-    getUserById(userId).then(setUser).catch(() => {});
-  }, [userId]);
+    if (!conversationId) return;
+    getConversation(conversationId).then(setConversation).catch(() => {});
+  }, [conversationId]);
 
   // Load tab data (lazy, cached)
   const loadTabData = useCallback(async (tab: TabType) => {
@@ -108,14 +105,10 @@ export default function UserProfileScreen() {
   useEffect(() => { loadTabData(activeTab); }, [activeTab, loadTabData]);
 
   // ==================== Animated Styles ====================
-  // 2 states only: Default (scrollY=0) ↔ Collapsed (scrollY≥SCROLL_DIST)
-
-  /** Header height: shrinks as user scrolls */
   const headerStyle = useAnimatedStyle(() => ({
     height: interpolate(scrollY.value, [0, SCROLL_DIST], [HEADER_MAX, HEADER_MIN], Extrapolation.CLAMP),
   }));
 
-  /** Avatar: shrink + fade */
   const avatarStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, SCROLL_DIST * 0.4], [1, 0], Extrapolation.CLAMP),
     transform: [{
@@ -123,12 +116,10 @@ export default function UserProfileScreen() {
     }],
   }));
 
-  /** Center name + status: fade out */
   const centerInfoStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, SCROLL_DIST * 0.3], [1, 0], Extrapolation.CLAMP),
   }));
 
-  /** Sticky bar: fade in */
   const stickyBarStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [SCROLL_DIST * 0.5, SCROLL_DIST * 0.8], [0, 1], Extrapolation.CLAMP),
   }));
@@ -145,9 +136,17 @@ export default function UserProfileScreen() {
 
 
   // Display values
-  const displayName = user?.displayName || 'User';
-  const avatarUrl = user?.avatarUrl || '';
-  const statusText = formatLastSeen(user?.lastSeen || null, user?.isOnline || false);
+  const displayName = conversation?.groupName || 'Nhóm';
+  const avatarUrl = conversation?.groupAvatar || '';
+  const statusText = conversation ? `${conversation.participants.length} thành viên` : '';
+
+  if (!conversation) {
+    return (
+      <View style={[st.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#50A8EB" />
+      </View>
+    );
+  }
 
   // ==================== Render ====================
   return (
@@ -164,7 +163,7 @@ export default function UserProfileScreen() {
         bounces={false}
       >
         <ProfileActions onMessage={() => router.back()} onMute={() => {}} onCall={() => {}} onVideoCall={() => {}} />
-        <ProfileInfo phoneNumber={user?.phoneNumber || ''} bio={user?.bio || ''} />
+        <GroupMembersList participants={conversation.participants} />
 
         {/* Tab bar */}
         <View style={st.tabBarWrap}>
@@ -198,7 +197,7 @@ export default function UserProfileScreen() {
               <Image source={{ uri: avatarUrl }} style={st.avatar} />
             ) : (
               <View style={st.avatarPlaceholder}>
-                <Text style={st.avatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
+                <Ionicons name="people" size={40} color="#FFF" />
               </View>
             )}
           </TouchableOpacity>
@@ -252,9 +251,8 @@ const st = StyleSheet.create({
   avatar: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 },
   avatarPlaceholder: {
     width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: '#54A5E8', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#50A8EB', alignItems: 'center', justifyContent: 'center',
   },
-  avatarLetter: { color: '#FFF', fontSize: 40, fontWeight: '600' },
 
   centerInfo: { position: 'absolute', bottom: 24, alignSelf: 'center', alignItems: 'center' },
   centerName: { color: '#010101', fontSize: 22, fontWeight: '600' },

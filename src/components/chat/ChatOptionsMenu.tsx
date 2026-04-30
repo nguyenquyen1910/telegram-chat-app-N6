@@ -14,14 +14,74 @@ interface ChatOptionsMenuProps {
   visible: boolean;
   onClose: () => void;
   onChangeWallpaper: () => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
+  onSearch?: () => void;
+  onAddContact?: () => void;
+  conversationType?: 'private' | 'group';
+  onAddMember?: () => void;
+  onChangeGroupAvatar?: () => void;
+  onRenameGroup?: () => void;
+  onLeaveGroup?: () => void;
 }
 
 export default function ChatOptionsMenu({
   visible,
   onClose,
   onChangeWallpaper,
+  isMuted = false,
+  onToggleMute,
+  onSearch,
+  onAddContact,
+  conversationType = 'private',
+  onAddMember,
+  onChangeGroupAvatar,
+  onRenameGroup,
+  onLeaveGroup,
 }: ChatOptionsMenuProps) {
-  const menuItems: ChatOptionsMenuItem[] = [
+  const menuItems: ChatOptionsMenuItem[] = [];
+
+  if (conversationType === 'group') {
+    menuItems.push({
+      id: 'add_member',
+      icon: 'person-add-outline',
+      label: 'Thêm thành viên',
+      onPress: () => {
+        onClose();
+        setTimeout(() => onAddMember?.(), 300);
+      },
+    });
+    menuItems.push({
+      id: 'change_avatar',
+      icon: 'camera-outline',
+      label: 'Đổi ảnh nhóm',
+      onPress: () => {
+        onClose();
+        setTimeout(() => onChangeGroupAvatar?.(), 300);
+      },
+    });
+    menuItems.push({
+      id: 'rename_group',
+      icon: 'pencil-outline',
+      label: 'Đổi tên nhóm',
+      onPress: () => {
+        onClose();
+        setTimeout(() => onRenameGroup?.(), 300);
+      },
+    });
+  } else {
+    menuItems.push({
+      id: 'add_contact',
+      icon: 'person-add-outline',
+      label: 'Thêm vào danh bạ',
+      onPress: () => {
+        onClose();
+        setTimeout(() => onAddContact?.(), 300);
+      },
+    });
+  }
+
+  menuItems.push(
     {
       id: 'wallpaper',
       icon: 'image-outline',
@@ -33,10 +93,11 @@ export default function ChatOptionsMenu({
     },
     {
       id: 'mute',
-      icon: 'notifications-off-outline',
-      label: 'Tắt thông báo',
+      icon: isMuted ? 'notifications-outline' : 'notifications-off-outline',
+      label: isMuted ? 'Bật thông báo' : 'Tắt thông báo',
       onPress: () => {
         onClose();
+        onToggleMute?.();
       },
     },
     {
@@ -45,9 +106,24 @@ export default function ChatOptionsMenu({
       label: 'Tìm tin nhắn',
       onPress: () => {
         onClose();
+        setTimeout(() => onSearch?.(), 300);
       },
-    },
-    {
+    }
+  );
+
+  if (conversationType === 'group') {
+    menuItems.push({
+      id: 'leave_group',
+      icon: 'log-out-outline',
+      label: 'Rời nhóm',
+      color: '#CC2929',
+      onPress: () => {
+        onClose();
+        setTimeout(() => onLeaveGroup?.(), 300);
+      },
+    });
+  } else {
+    menuItems.push({
       id: 'clear',
       icon: 'trash-outline',
       label: 'Xóa cuộc trò chuyện',
@@ -55,8 +131,8 @@ export default function ChatOptionsMenu({
       onPress: () => {
         onClose();
       },
-    },
-  ];
+    });
+  }
 
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent>

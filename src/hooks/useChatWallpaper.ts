@@ -1,4 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 
 export interface WallpaperOption {
   id: string;
@@ -64,15 +66,48 @@ export const WALLPAPER_OPTIONS: WallpaperOption[] = [
   },
 ];
 
-export function useChatWallpaper() {
+/**
+ * Hook quản lý wallpaper cho cuộc hội thoại
+ * Lưu trên Firestore tại conversations/{id}.wallpaperId
+ * Khi user A đổi wallpaper, user B cũng thấy real-time
+ */
+export function useChatWallpaper(conversationId?: string | null) {
   const [currentWallpaperId, setCurrentWallpaperId] = useState('default');
+
+  // Subscribe real-time wallpaper từ Firestore
+  useEffect(() => {
+    if (!conversationId || !db) return;
+
+    const convRef = doc(db, 'conversations', conversationId);
+
+    const unsubscribe = onSnapshot(convRef, (snapshot) => {
+      const data = snapshot.data();
+      if (data?.wallpaperId) {
+        setCurrentWallpaperId(data.wallpaperId);
+      }
+    }, (error) => {
+      console.warn('[Wallpaper] Subscription error:', error.message);
+    });
+
+    return () => unsubscribe();
+  }, [conversationId]);
 
   const currentWallpaper =
     WALLPAPER_OPTIONS.find((w) => w.id === currentWallpaperId) || WALLPAPER_OPTIONS[0];
 
-  const setWallpaper = useCallback((id: string) => {
-    setCurrentWallpaperId(id);
-  }, []);
+  // Lưu wallpaper lên Firestore → cả 2 user đều thấy
+  const setWallpaper = useCallback(async (id: string) => {
+    setCurrentWallpaperId(id); // Optimistic update
+
+    if (!conversationId || !db) return;
+
+    try {
+      const convRef = doc(db, 'conversations', conversationId);
+      await updateDoc(convRef, { wallpaperId: id });
+    } catch (error) {
+      console.warn('[Wallpaper] Failed to save:', error);
+    }
+  }, [conversationId]);
 
   return {
     currentWallpaper,

@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.telegramchatapp"
+      "package": "com.anonymous.telegramchatapp",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",

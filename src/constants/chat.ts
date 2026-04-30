@@ -1,194 +1,18 @@
 import { Timestamp } from 'firebase/firestore';
-import { Message, User, Conversation } from '@/types/chat';
 
 // ==================== Cloudinary Config ====================
 export const CLOUDINARY_CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your_cloud_name';
 export const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'your_upload_preset';
 export const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+export const CLOUDINARY_VIDEO_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+export const CLOUDINARY_RAW_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`;
+export const CLOUDINARY_AUTO_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
 
 // ==================== Chat Constants ====================
-export const MESSAGES_PER_PAGE = 20;
+export const MESSAGES_PER_PAGE = 50;
 export const MAX_IMAGE_SIZE_MB = 10;
 export const IMAGE_QUALITY = 0.7;
 export const THUMBNAIL_SIZE = { width: 150, height: 150 };
-
-// ==================== Mock Data ====================
-export const MOCK_CURRENT_USER: User = {
-  uid: 'user_me',
-  displayName: 'You',
-  phoneNumber: '+84 90 1234567',
-  avatarUrl: '',
-  bio: 'Hey there! I am using Telegram',
-  lastSeen: null,
-  isOnline: true,
-  createdAt: Timestamp.now(),
-};
-
-export const MOCK_OTHER_USER: User = {
-  uid: 'user_martha',
-  displayName: 'Ngọc Anh',
-  phoneNumber: '+84 35 6927326',
-  avatarUrl: 'https://i.pravatar.cc/150?img=47',
-  bio: 'Yêu đời mỗi ngày 🌸',
-  lastSeen: Timestamp.now(),
-  isOnline: true,
-  createdAt: Timestamp.now(),
-};
-
-const now = Date.now();
-const minute = 60 * 1000;
-
-export const MOCK_MESSAGES: Message[] = [
-  {
-    id: 'msg_1',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: 'Chào buổi sáng!',
-    type: 'text',
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 120 * minute),
-  },
-  {
-    id: 'msg_2',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: 'Nhật Bản đẹp quá!',
-    type: 'text',
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 119 * minute),
-  },
-  {
-    id: 'msg_3',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: '',
-    type: 'image',
-    imageUrl: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=400',
-    fileName: 'IMG_0475.PNG',
-    fileSize: 2516582,
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 115 * minute),
-  },
-  {
-    id: 'msg_4',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: '',
-    type: 'image',
-    imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400',
-    fileName: 'IMG_0481.PNG',
-    fileSize: 2936012,
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 114 * minute),
-  },
-  {
-    id: 'msg_5',
-    conversationId: 'conv_1',
-    senderId: 'user_martha',
-    text: 'Bạn có biết mấy giờ rồi không?',
-    type: 'reply',
-    replyTo: {
-      messageId: 'msg_1',
-      text: 'Chào buổi sáng!',
-      senderName: 'Ngọc Anh',
-    },
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 80 * minute),
-  },
-  {
-    id: 'msg_6',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: 'Đang là buổi sáng ở Tokyo 😎',
-    type: 'text',
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 77 * minute),
-  },
-  {
-    id: 'msg_voice_1',
-    conversationId: 'conv_1',
-    senderId: 'user_martha',
-    text: '',
-    type: 'voice',
-    voiceDuration: 17,
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 76 * minute),
-  },
-  {
-    id: 'msg_7',
-    conversationId: 'conv_1',
-    senderId: 'user_martha',
-    text: 'Món ăn nào được yêu thích nhất ở Nhật vậy?',
-    type: 'text',
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 75 * minute),
-  },
-  {
-    id: 'msg_8',
-    conversationId: 'conv_1',
-    senderId: 'user_martha',
-    text: 'Bạn có thích không?',
-    type: 'text',
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 74 * minute),
-  },
-  {
-    id: 'msg_9',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: 'Mình nghĩ hai món ngon nhất là:',
-    type: 'text',
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 70 * minute),
-  },
-  {
-    id: 'msg_10',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: '',
-    type: 'image',
-    imageUrl: 'https://images.unsplash.com/photo-1553621042-f6e147245754?w=400',
-    fileName: 'IMG_0483.PNG',
-    fileSize: 2936012,
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 69 * minute),
-  },
-  {
-    id: 'msg_11',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: '',
-    type: 'image',
-    imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400',
-    fileName: 'IMG_0484.PNG',
-    fileSize: 2726297,
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 68 * minute),
-  },
-  {
-    id: 'msg_voice_2',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    text: '',
-    type: 'voice',
-    voiceDuration: 32,
-    status: 'read',
-    createdAt: Timestamp.fromMillis(now - 65 * minute),
-  },
-];
-
-export const MOCK_CONVERSATION: Conversation = {
-  id: 'conv_1',
-  participants: ['user_me', 'user_martha'],
-  lastMessage: {
-    text: '',
-    senderId: 'user_me',
-    timestamp: Timestamp.fromMillis(now - 68 * minute),
-    type: 'image',
-  },
-  updatedAt: Timestamp.fromMillis(now - 68 * minute),
-  type: 'private',
-};
 
 // ==================== Helpers ====================
 export function formatFileSize(bytes: number): string {
@@ -220,4 +44,37 @@ export function formatLastSeen(timestamp: Timestamp | null, isOnline: boolean): 
   
   const date = timestamp.toDate();
   return `truy cập ${date.toLocaleDateString('vi-VN')}`;
+}
+
+export function formatChatListTime(timestamp: Timestamp | null): string {
+  if (!timestamp || !timestamp.toDate) return '';
+  try {
+    const date = timestamp.toDate();
+    const now = new Date();
+  
+    // Today
+    if (date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
+      return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    }
+  
+    // Yesterday
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear()) {
+      return 'Hôm qua';
+    }
+  
+    // Within last 7 days
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    if (diffDays < 7) {
+      const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+      return days[date.getDay()];
+    }
+  
+    // Older
+    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(2)}`;
+  } catch {
+    return '';
+  }
 }

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { ChatItem, ChatWithUser } from './ChatItem';
@@ -11,6 +11,7 @@ interface SwipeableChatItemProps {
   onMute?: () => void;
   onPin?: () => void;
   isMuted?: boolean;
+  currentUid?: string | null;
 }
 
 export function SwipeableChatItem({ 
@@ -19,30 +20,53 @@ export function SwipeableChatItem({
   onDelete, 
   onMute, 
   onPin,
-  isMuted 
+  isMuted,
+  currentUid 
 }: SwipeableChatItemProps) {
-  
-  const renderRightActions = (
-    progress: Animated.AnimatedInterpolation<number>,
-    dragX: Animated.AnimatedInterpolation<number>
-  ) => {
-    const scale = dragX.interpolate({
-      inputRange: [-150, -50, 0],
-      outputRange: [1, 0.8, 0],
-      extrapolate: 'clamp',
-    });
+  const swipeableRef = useRef<Swipeable>(null);
 
+  const closeSwipeable = () => {
+    swipeableRef.current?.close();
+  };
+
+  const handleDelete = () => {
+    closeSwipeable();
+    onDelete?.();
+  };
+
+  const handleMute = () => {
+    closeSwipeable();
+    onMute?.();
+  };
+
+  const renderRightActions = () => {
     return (
       <View style={styles.actionsContainer}>
         {onMute && (
-          <Animated.View style={[styles.actionBtn, styles.muteBtn, { transform: [{ scale }] }]}>
-            <Ionicons name={isMuted ? "volume-high" : "volume-mute"} size={26} color="#FFF" />
-          </Animated.View>
+          <TouchableOpacity 
+            style={[styles.actionBtn, styles.muteBtn]} 
+            onPress={handleMute}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name={isMuted ? "volume-high" : "volume-mute"} 
+              size={22} 
+              color="#FFF" 
+            />
+            <Text style={styles.actionLabel}>
+              {isMuted ? 'Bật' : 'Tắt'}
+            </Text>
+          </TouchableOpacity>
         )}
         {onDelete && (
-          <Animated.View style={[styles.actionBtn, styles.deleteBtn, { transform: [{ scale }] }]}>
-            <Ionicons name="trash" size={26} color="#FFF" />
-          </Animated.View>
+          <TouchableOpacity 
+            style={[styles.actionBtn, styles.deleteBtn]} 
+            onPress={handleDelete}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash" size={22} color="#FFF" />
+            <Text style={styles.actionLabel}>Xóa</Text>
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -50,11 +74,13 @@ export function SwipeableChatItem({
 
   return (
     <Swipeable
+      ref={swipeableRef}
       renderRightActions={renderRightActions}
       friction={2}
       rightThreshold={40}
+      overshootRight={false}
     >
-      <ChatItem chat={chat} onPress={onPress} isMuted={isMuted} />
+      <ChatItem chat={chat} currentUid={currentUid} onPress={onPress} isMuted={isMuted} />
     </Swipeable>
   );
 }
@@ -62,17 +88,24 @@ export function SwipeableChatItem({
 const styles = StyleSheet.create({
   actionsContainer: {
     flexDirection: 'row',
-    width: 150,
+    width: 160,
   },
   actionBtn: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 4,
   },
   muteBtn: {
-    backgroundColor: '#C7C7CC', // Gray
+    backgroundColor: '#8E8E93',
   },
   deleteBtn: {
-    backgroundColor: '#FF3B30', // Red
+    backgroundColor: '#FF3B30',
+  },
+  actionLabel: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
   },
 });

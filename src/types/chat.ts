@@ -28,6 +28,9 @@ export interface Conversation {
   lastMessage: LastMessage | null;
   updatedAt: Timestamp;
   type: 'private' | 'group';
+  lastReadBy?: { [uid: string]: Timestamp };
+  mutedBy?: { [uid: string]: boolean };
+  wallpaperId?: string;
   groupName?: string;
   groupAvatar?: string;
   unreadCount?: Record<string, number>;
@@ -35,7 +38,7 @@ export interface Conversation {
 
 // ==================== Message ====================
 export type MessageType = 'text' | 'image' | 'file' | 'reply' | 'voice';
-export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
+export type MessageStatus = 'sending' | 'sent' | 'read';
 
 export interface ReplyTo {
   messageId: string;
@@ -52,11 +55,18 @@ export interface Message {
   imageUrl?: string;
   fileName?: string;
   fileSize?: number;
+  imageWidth?: number;
+  imageHeight?: number;
   fileThumbnail?: string;
   replyTo?: ReplyTo;
   voiceDuration?: number;
   status: MessageStatus;
   createdAt: Timestamp;
+  // Message actions
+  reactions?: { [emoji: string]: string[] };
+  isRevoked?: boolean;
+  deletedFor?: string[];
+  isEdited?: boolean;
 }
 
 // ==================== Media Upload ====================
@@ -64,6 +74,8 @@ export interface UploadResult {
   url: string;
   size: number;
   publicId: string;
+  width?: number;
+  height?: number;
 }
 
 // ==================== Component Props ====================
@@ -72,6 +84,7 @@ export interface ChatHeaderProps {
   userAvatar: string;
   lastSeen: string;
   isOnline: boolean;
+  isGroup?: boolean;
   onBackPress: () => void;
   onProfilePress: () => void;
   onCallPress?: () => void;
@@ -82,19 +95,25 @@ export interface MessageBubbleProps {
   message: Message;
   isOutgoing: boolean;
   senderName?: string;
-  onReply?: (message: Message) => void;
+  isHighlighted?: boolean;
+  currentUid?: string;
+  onLongPress?: (message: Message) => void;
   onImagePress?: (imageUrl: string) => void;
+  onFilePress?: (fileUrl: string, fileName: string) => void;
 }
 
 export interface MessageInputProps {
   onSendText: (text: string) => void;
-  onPickImage: () => void;
+  onAttach: () => void;
   onSendImage: (uri: string, fileName: string, caption: string) => void;
   pendingImage: { uri: string; fileName: string } | null;
   onCancelImage: () => void;
   replyingTo: Message | null;
   replyingSenderName?: string;
   onCancelReply: () => void;
+  editingMessage: Message | null;
+  onCancelEdit: () => void;
+  onSaveEdit: (messageId: string, newText: string) => void;
 }
 
 export interface ImageMessageProps {
