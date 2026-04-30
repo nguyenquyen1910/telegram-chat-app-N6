@@ -1,12 +1,12 @@
 import { auth, db } from '@/config/firebase';
 import {
   onAuthStateChanged,
-  User,
   signOut as firebaseSignOut,
   signInAnonymously,
 } from 'firebase/auth';
-import { doc, setDoc, getDocs, query, where, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDocs, query, where, collection, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { migrateUserConversationReferences } from '@/services/chatService';
 
 // ======= EMAIL OTP CONFIG =======
 const EMAILJS_SERVICE_ID = 'service_qj13lp9';
@@ -29,10 +29,98 @@ let currentPhone: string | null = null;
 let otpExpiry: number | null = null;
 const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
+export interface AppUser {
+  uid: string;
+  phoneNumber: string;
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+  avatarUrl?: string;
+  isOnline?: boolean;
+}
+
+const authStateListeners = new Set<(user: AppUser | null) => void>();
+
 // Generate random 6-digit OTP
 const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
+
+const generateAppUserId = (): string => {
+  return `user-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const normalizeUser = (raw: any, fallbackUid?: string): AppUser | null => {
+  if (!raw) return null;
+  const uid = raw.uid || fallbackUid;
+  if (!uid) return null;
+
+  return {
+    uid,
+    phoneNumber: raw.phoneNumber || '',
+    email: raw.email || '',
+    displayName: raw.displayName || '',
+    photoURL: raw.photoURL || raw.avatarUrl || '',
+    avatarUrl: raw.avatarUrl || raw.photoURL || '',
+    isOnline: typeof raw.isOnline === 'boolean' ? raw.isOnline : true,
+  };
+};
+
+async function ensureFirebaseAuthUid(): Promise<string | null> {
+  if (!auth) return null;
+
+  if (auth.currentUser?.uid) {
+    return auth.currentUser.uid;
+  }
+
+  try {
+    const result = await signInAnonymously(auth);
+    return result.user.uid;
+  } catch (error) {
+    console.warn('[AUTH] Anonymous sign-in failed:', error);
+    return null;
+  }
+}
+
+async function migrateLegacyUidIfNeeded(
+  legacyUid: string | null,
+  canonicalUid: string
+): Promise<void> {
+  if (!db || !legacyUid || legacyUid === canonicalUid) return;
+
+  try {
+    await setDoc(
+      doc(db, 'users', canonicalUid),
+      {
+        uid: canonicalUid,
+        legacyUids: arrayUnion(legacyUid),
+      },
+      { merge: true }
+    );
+
+    const result = await migrateUserConversationReferences(legacyUid, canonicalUid);
+    console.log(
+      `[AUTH] Migrated legacy uid ${legacyUid} -> ${canonicalUid} ` +
+      `(conversations=${result.conversationsUpdated}, merged=${result.conversationsMerged}, messages=${result.messagesUpdated})`
+    );
+  } catch (error) {
+    console.warn(`[AUTH] Failed to migrate legacy uid ${legacyUid} -> ${canonicalUid}:`, error);
+  }
+}
+
+async function persistSessionUser(user: AppUser): Promise<void> {
+  await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  await updateLastActive();
+  for (const listener of authStateListeners) {
+    listener(user);
+  }
+}
+
+function emitSignedOut() {
+  for (const listener of authStateListeners) {
+    listener(null);
+  }
+}
 
 // ============ PHONE CHECK ============
 
@@ -175,32 +263,15 @@ export const verifySmsOTP = async (code: string): Promise<boolean> => {
 export const registerUser = async (
   phoneNumber: string,
   email: string
-): Promise<any> => {
-  const uid = `user-${Date.now()}`;
-  const userData = {
-    uid,
-    phoneNumber,
-    email,
-    createdAt: new Date().toISOString(),
-  };
-
-  // Try Firebase anonymous sign-in
-  let finalUid = uid;
-  if (auth) {
-    try {
-      const result = await signInAnonymously(auth);
-      finalUid = result.user.uid;
-      userData.uid = finalUid;
-    } catch (e) {
-      console.warn('[AUTH] Firebase anonymous sign-in failed, using local auth');
-    }
-  }
+): Promise<AppUser> => {
+  const canonicalUid = generateAppUserId();
+  const legacyUid = await ensureFirebaseAuthUid();
 
   // Save to Firestore
   if (db) {
     try {
-      await setDoc(doc(db, 'users', finalUid), {
-        uid: finalUid,
+      await setDoc(doc(db, 'users', canonicalUid), {
+        uid: canonicalUid,
         phoneNumber,
         email,
         displayName: '',
@@ -208,21 +279,33 @@ export const registerUser = async (
         isOnline: true,
         lastSeen: serverTimestamp(),
         createdAt: serverTimestamp(),
+        ...(legacyUid && legacyUid !== canonicalUid ? { legacyUids: [legacyUid] } : {}),
       });
-      console.log(`[DB] User registered in Firestore: ${finalUid}`);
+      console.log(`[DB] User registered in Firestore: ${canonicalUid}`);
     } catch (e) {
       console.warn('[DB] Failed to save user to Firestore:', e);
     }
   }
 
+  const userData: AppUser = {
+    uid: canonicalUid,
+    phoneNumber,
+    email,
+    displayName: '',
+    photoURL: '',
+    avatarUrl: '',
+    isOnline: true,
+  };
+
+  await migrateLegacyUidIfNeeded(legacyUid, canonicalUid);
+
   // Save to AsyncStorage for persistent login
-  await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
-  await updateLastActive();
+  await persistSessionUser(userData);
   return userData;
 };
 
 // Login: update user status in Firestore
-export const loginUser = async (phoneNumber: string): Promise<any> => {
+export const loginUser = async (phoneNumber: string): Promise<AppUser> => {
   if (!db) throw new Error('Database not available');
 
   const usersRef = collection(db, 'users');
@@ -234,30 +317,36 @@ export const loginUser = async (phoneNumber: string): Promise<any> => {
   }
 
   const userDoc = snapshot.docs[0];
-  const userData = userDoc.data();
+  const canonicalUid = userDoc.id;
+  const storedUser = normalizeUser(userDoc.data(), canonicalUid);
+  if (!storedUser) {
+    throw new Error('User data is invalid');
+  }
+
+  const legacyUid = await ensureFirebaseAuthUid();
 
   // Update online status
   try {
     await setDoc(doc(db, 'users', userDoc.id), {
+      uid: canonicalUid,
       isOnline: true,
       lastSeen: serverTimestamp(),
+      ...(legacyUid && legacyUid !== canonicalUid ? { legacyUids: arrayUnion(legacyUid) } : {}),
     }, { merge: true });
   } catch (e) {
     console.warn('[DB] Failed to update user status:', e);
   }
 
-  // Try Firebase anonymous sign-in
-  if (auth) {
-    try {
-      await signInAnonymously(auth);
-    } catch (e) {
-      console.warn('[AUTH] Firebase sign-in failed');
-    }
-  }
+  await migrateLegacyUidIfNeeded(legacyUid, canonicalUid);
+
+  const userData: AppUser = {
+    ...storedUser,
+    uid: canonicalUid,
+    isOnline: true,
+  };
 
   // Save to AsyncStorage
-  await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
-  await updateLastActive();
+  await persistSessionUser(userData);
   console.log(`[AUTH] User logged in: ${userData.uid}`);
   return userData;
 };
@@ -275,6 +364,7 @@ export const signOutUser = async (): Promise<void> => {
       // Ignore
     }
   }
+  emitSignedOut();
 };
 
 // Update last active timestamp (call this when app is active)
@@ -283,48 +373,75 @@ export const updateLastActive = async (): Promise<void> => {
 };
 
 // On auth state change - check session timeout
-export const onAuthStateChange = (callback: (user: User | null) => void) => {
-  AsyncStorage.multiGet([AUTH_STORAGE_KEY, SESSION_KEY]).then((stores) => {
-    const stored = stores[0][1];
-    const lastActive = stores[1][1];
+export const onAuthStateChange = (callback: (user: AppUser | null) => void) => {
+  authStateListeners.add(callback);
 
-    if (stored) {
-      // Check session timeout
+  const emitStoredUser = async () => {
+    try {
+      const stores = await AsyncStorage.multiGet([AUTH_STORAGE_KEY, SESSION_KEY]);
+      const stored = stores[0][1];
+      const lastActive = stores[1][1];
+
+      if (!stored) {
+        callback(null);
+        return;
+      }
+
       if (lastActive) {
         const elapsed = Date.now() - parseInt(lastActive, 10);
         if (elapsed > SESSION_TIMEOUT_MS) {
-          // Session expired → clear and require re-login
           console.log(`[AUTH] Session expired (${Math.round(elapsed / 1000)}s ago)`);
-          AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-          AsyncStorage.removeItem(SESSION_KEY);
+          await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+          await AsyncStorage.removeItem(SESSION_KEY);
           callback(null);
           return;
         }
       }
-      // Session valid → restore user
-      const userData = JSON.parse(stored);
-      // Update last active
-      AsyncStorage.setItem(SESSION_KEY, Date.now().toString());
+
+      const storedUser = normalizeUser(JSON.parse(stored));
+      if (!storedUser) {
+        await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+        callback(null);
+        return;
+      }
+
+      await updateLastActive();
       console.log('[AUTH] Session restored');
-      callback(userData as any);
-    } else if (auth) {
-      onAuthStateChanged(auth, callback);
-    } else {
+      callback(storedUser);
+      void migrateLegacyUidIfNeeded(auth?.currentUser?.uid ?? null, storedUser.uid);
+    } catch {
       callback(null);
     }
-  }).catch(() => {
-    callback(null);
-  });
+  };
 
-  if (auth) {
-    return onAuthStateChanged(auth, (firebaseUser) => {
-      AsyncStorage.getItem(AUTH_STORAGE_KEY).then((stored) => {
-        if (!stored) {
-          callback(firebaseUser);
-        }
-      });
-    });
+  void emitStoredUser();
+
+  if (!auth) {
+    return () => {
+      authStateListeners.delete(callback);
+    };
   }
 
-  return () => {};
+  const firebaseAuth = auth;
+  const unsubscribeFirebase = onAuthStateChanged(firebaseAuth, async () => {
+    const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+    if (!stored) {
+      callback(null);
+      return;
+    }
+
+    const storedUser = normalizeUser(JSON.parse(stored));
+    if (!storedUser) {
+      callback(null);
+      return;
+    }
+
+    callback(storedUser);
+    void migrateLegacyUidIfNeeded(firebaseAuth.currentUser?.uid ?? null, storedUser.uid);
+  });
+
+  return () => {
+    authStateListeners.delete(callback);
+    unsubscribeFirebase();
+  };
 };

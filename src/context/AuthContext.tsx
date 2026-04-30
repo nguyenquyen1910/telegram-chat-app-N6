@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { User } from 'firebase/auth';
-import { onAuthStateChange, signOutUser, updateLastActive } from '@/services/auth';
+import { AppUser, onAuthStateChange, signOutUser, updateLastActive } from '@/services/auth';
 
 interface AuthContextType {
-  user: User | null;
+  user: AppUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   logout: () => Promise<void>;
@@ -18,14 +17,14 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((firebaseUser) => {
-      console.log('[AuthContext] Auth state changed:', firebaseUser ? `uid=${(firebaseUser as any).uid}` : 'null');
-      setUser(firebaseUser);
+    const unsubscribe = onAuthStateChange((appUser) => {
+      console.log('[AuthContext] Auth state changed:', appUser ? `uid=${appUser.uid}` : 'null');
+      setUser(appUser);
       setIsLoading(false);
     });
     return unsubscribe;
