@@ -219,7 +219,7 @@ export function useChatList() {
   }, [chats]);
 
   const totalUnreadCount = useMemo(() => {
-    return chats.reduce((total, chat) => total + (chat.unreadCount || 0), 0);
+    return chats.reduce((total, chat) => total + ((chat.unreadCount || 0) > 0 ? 1 : 0), 0);
   }, [chats]);
 
   return {
