@@ -5,7 +5,8 @@ import {
   getConversationsForUser,
   getUnreadCount,
 } from '@/services/chatService';
-import { getUserById } from '@/services/userService';
+import { getUserById, subscribeToUserStatus } from '@/services/userService';
+import { isUserTrulyOnline } from '@/constants/chat';
 import { ChatWithUser } from '@/components/chat-list/ChatItem';
 import { FilterTabType } from '@/components/chat-list/FilterTabs';
 import { useAuth } from '@/context/AuthContext';
@@ -36,7 +37,7 @@ async function buildChatItems(
               uid: userData.uid,
               displayName: userData.displayName || userData.phoneNumber || 'User',
               avatarUrl: userData.avatarUrl || '',
-              isOnline: userData.isOnline || false,
+              isOnline: isUserTrulyOnline(userData.isOnline, userData.lastSeen),
             };
           }
         } catch (error) {
@@ -152,6 +153,38 @@ export function useChatList() {
     };
   }, [applyConversations, currentUid]);
 
+  // Subscribe to realtime online status for each private chat's other user
+  const otherUserUids = useMemo(() => {
+    return chats
+      .filter(c => c.conversation.type === 'private' && c.otherUser?.uid)
+      .map(c => c.otherUser!.uid);
+  }, [chats]);
+
+  useEffect(() => {
+    if (!currentUid || otherUserUids.length === 0) return;
+
+    const unsubscribes = otherUserUids.map(uid =>
+      subscribeToUserStatus(uid, (updatedUser) => {
+        const trulyOnline = isUserTrulyOnline(updatedUser.isOnline, updatedUser.lastSeen);
+
+        const updateOnlineStatus = (list: ChatWithUser[]) =>
+          list.map(c => {
+            if (c.otherUser?.uid !== uid) return c;
+            if (c.otherUser.isOnline === trulyOnline) return c;
+            return {
+              ...c,
+              otherUser: { ...c.otherUser, isOnline: trulyOnline },
+            };
+          });
+
+        setChats(prev => updateOnlineStatus(prev));
+        cachedChats = updateOnlineStatus(cachedChats);
+      })
+    );
+
+    return () => unsubscribes.forEach(fn => fn());
+  }, [otherUserUids.join(','), currentUid]);
+
   const filteredChats = useMemo(() => {
     return chats.filter((chat) => {
       if (activeTab === 'private' && chat.conversation.type !== 'private') return false;
@@ -186,7 +219,7 @@ export function useChatList() {
   }, [chats]);
 
   const totalUnreadCount = useMemo(() => {
-    return chats.reduce((total, chat) => total + (chat.unreadCount || 0), 0);
+    return chats.reduce((total, chat) => total + ((chat.unreadCount || 0) > 0 ? 1 : 0), 0);
   }, [chats]);
 
   return {

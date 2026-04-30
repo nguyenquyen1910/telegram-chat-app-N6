@@ -15,7 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import * as Clipboard from 'expo-clipboard';
 import { Message } from '@/types/chat';
-import { formatLastSeen } from '@/constants/chat';
+import { formatLastSeen, isUserTrulyOnline } from '@/constants/chat';
 import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
@@ -570,8 +570,8 @@ export default function ChatDetailScreen() {
           <ChatHeader
             userName={otherUser?.displayName || 'User'}
             userAvatar={otherUser?.avatarUrl || ''}
-            lastSeen={formatLastSeen(otherUser?.lastSeen || null, otherUser?.isOnline || false)}
-            isOnline={otherUser?.isOnline || false}
+            lastSeen={formatLastSeen(otherUser?.lastSeen || null, isUserTrulyOnline(otherUser?.isOnline || false, otherUser?.lastSeen || null))}
+            isOnline={isUserTrulyOnline(otherUser?.isOnline || false, otherUser?.lastSeen || null)}
             isGroup={false}
             onBackPress={() => router.back()}
             onProfilePress={() =>

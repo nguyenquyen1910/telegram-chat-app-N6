@@ -230,10 +230,8 @@ export default function ChatsScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.headerBtn}>
-            <Text style={styles.editText}>Sửa</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Tin nhắn</Text>
+          <View style={styles.headerBtn} />
+          <Text style={styles.headerTitle}>Telegram</Text>
           <TouchableOpacity style={styles.headerBtn} onPress={() => setShowNewChat(true)}>
             <Ionicons name="create-outline" size={28} color={TelegramColors.primary} />
           </TouchableOpacity>
@@ -276,6 +274,7 @@ export default function ChatsScreen() {
             )}
             keyExtractor={(item) => item.conversation.id}
             style={styles.list}
+            contentContainerStyle={{ paddingBottom: 110 }}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -444,8 +443,9 @@ const styles = StyleSheet.create({
   headerBtn: { paddingVertical: 4, paddingHorizontal: 4, zIndex: 10 },
   editText: { color: TelegramColors.primary, fontSize: 17 },
   headerTitle: {
-    fontSize: 17, fontWeight: '600', color: '#000000',
+    fontSize: 22, fontWeight: '700', color: TelegramColors.primary,
     position: 'absolute', left: 0, right: 0, textAlign: 'center',
+    letterSpacing: -0.5,
   },
   list: { flex: 1, backgroundColor: '#FFFFFF' },
   loadingState: { flex: 1, justifyContent: 'center', alignItems: 'center' },
