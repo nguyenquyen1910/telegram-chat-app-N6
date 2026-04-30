@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableHighlight } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Conversation, Message } from '@/types/chat';
-import { formatMessageTime } from '@/constants/chat';
+import { formatChatListTime } from '@/constants/chat';
 import { Avatar } from './Avatar';
 import { Badge } from './Badge';
 
@@ -19,11 +19,12 @@ export interface ChatWithUser {
 
 interface ChatItemProps {
   chat: ChatWithUser;
+  currentUid?: string | null;
   onPress: () => void;
   isMuted?: boolean;
 }
 
-export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItemProps) => {
+export const ChatItem = React.memo(({ chat, currentUid, onPress, isMuted = false }: ChatItemProps) => {
   const { conversation, otherUser, unreadCount = 0 } = chat;
   const isGroup = conversation.type === 'group';
   const hasUnread = unreadCount > 0 && !isMuted;
@@ -37,13 +38,23 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
     : otherUser?.avatarUrl;
   const isOnline = isGroup ? false : (otherUser?.isOnline || false);
 
-  // Determine last message text
+  // Determine last message text and prefix icon
   const lastMsg = conversation.lastMessage;
+  const isSentByMe = lastMsg?.senderId === currentUid;
+
+  let lastMsgPrefix = null;
   let lastMsgText = 'Bắt đầu cuộc trò chuyện';
+
   if (lastMsg) {
-    if (lastMsg.type === 'image') lastMsgText = '📷 Ảnh';
-    if (lastMsg.type === 'voice') lastMsgText = '🎤 Tin nhắn thoại';
-    if (lastMsg.type === 'text' || lastMsg.type === 'reply') lastMsgText = lastMsg.text || '';
+    if (lastMsg.type === 'image') {
+      lastMsgPrefix = <Ionicons name="image" size={15} color="#54A5E8" style={{ marginRight: 4 }} />;
+      lastMsgText = 'Ảnh';
+    } else if (lastMsg.type === 'voice') {
+      lastMsgPrefix = <Ionicons name="mic" size={15} color="#54A5E8" style={{ marginRight: 4 }} />;
+      lastMsgText = 'Tin nhắn thoại';
+    } else if (lastMsg.type === 'text' || lastMsg.type === 'reply') {
+      lastMsgText = lastMsg.text || '';
+    }
   }
 
   return (
@@ -52,7 +63,7 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
       underlayColor="#E5E5EA"
       activeOpacity={1}
     >
-      <View style={[styles.container, hasUnread && styles.containerUnread]}>
+      <View style={styles.container}>
         <Avatar uri={avatarUrl} name={name} isOnline={isOnline} />
         
         <View style={styles.content}>
@@ -70,18 +81,24 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
             </View>
             
             {lastMsg?.timestamp && (
-              <Text style={[styles.time, hasUnread ? styles.timeUnread : null]}>
-                {formatMessageTime(lastMsg.timestamp)}
+              <Text style={[styles.time, hasUnread && styles.timeUnread]}>
+                {(() => { try { return formatChatListTime(lastMsg.timestamp); } catch { return ''; } })()}
               </Text>
             )}
           </View>
           
           <View style={styles.bottomRow}>
             <View style={styles.lastMsgContainer}>
-              <Text
-                style={[styles.lastMsg, hasUnread && styles.lastMsgUnread]}
-                numberOfLines={2}
-              >
+              {isSentByMe && (
+                <Ionicons 
+                  name="checkmark-done" 
+                  size={16} 
+                  color="#54A5E8" 
+                  style={{ marginRight: 4, marginTop: 1 }} 
+                />
+              )}
+              {lastMsgPrefix}
+              <Text style={[styles.lastMsg, hasUnread && styles.lastMsgUnread]} numberOfLines={2}>
                 {lastMsgText}
               </Text>
             </View>
@@ -105,9 +122,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
-  },
-  containerUnread: {
-    backgroundColor: '#F0F7FF', // subtle blue tint for unread rows
   },
   content: {
     flex: 1,
@@ -142,15 +156,14 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   nameUnread: {
-    fontWeight: '700', // extra bold khi có tin chưa đọc
+    fontWeight: '700',
   },
   time: {
     fontSize: 14,
     color: '#8E8E93',
   },
   timeUnread: {
-    color: '#54A5E8',
-    fontWeight: '600',
+    color: '#54A5E8', // Telegram blue for unread
   },
   bottomRow: {
     flexDirection: 'row',
@@ -169,7 +182,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   lastMsgUnread: {
-    color: '#000000', // Đen đậm thay vì xám khi có tin chưa đọc
+    color: '#000000',
     fontWeight: '500',
   },
   badgeContainer: {

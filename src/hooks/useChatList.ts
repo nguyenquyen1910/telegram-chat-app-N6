@@ -1,92 +1,168 @@
-import { useState, useEffect, useMemo } from 'react';
-import { subscribeToConversations } from '@/services/chatService';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Conversation } from '@/types/chat';
+import {
+  subscribeToConversations,
+  getConversationsForUser,
+  getUnreadCount,
+} from '@/services/chatService';
 import { getUserById } from '@/services/userService';
 import { ChatWithUser } from '@/components/chat-list/ChatItem';
 import { FilterTabType } from '@/components/chat-list/FilterTabs';
 import { useAuth } from '@/context/AuthContext';
 
 let cachedChats: ChatWithUser[] = [];
-let hasLoadedChatList = false;
+let hasHydratedChatList = false;
+
+async function buildChatItems(
+  conversations: Conversation[],
+  currentUid: string
+): Promise<ChatWithUser[]> {
+  const sortedConversations = [...conversations].sort(
+    (a, b) => (b.updatedAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || 0)
+  );
+
+  return Promise.all(
+    sortedConversations.map(async (conversation) => {
+      const otherUid = conversation.participants.find(
+        (participantUid) => participantUid !== currentUid
+      );
+      let otherUser = null;
+
+      if (otherUid && conversation.type === 'private') {
+        try {
+          const userData = await getUserById(otherUid);
+          if (userData) {
+            otherUser = {
+              uid: userData.uid,
+              displayName: userData.displayName || userData.phoneNumber || 'User',
+              avatarUrl: userData.avatarUrl || '',
+              isOnline: userData.isOnline || false,
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to load user:', otherUid, error);
+        }
+      }
+
+      let unreadCount = 0;
+      try {
+        unreadCount = await getUnreadCount(conversation.id, currentUid);
+      } catch (error) {
+        console.warn('Failed to load unread count:', conversation.id, error);
+      }
+
+      return { conversation, otherUser, unreadCount } as ChatWithUser;
+    })
+  );
+}
 
 export function useChatList() {
   const { user } = useAuth();
   const currentUid = (user as any)?.uid || null;
 
   const [chats, setChats] = useState<ChatWithUser[]>(() => cachedChats);
-  const [loading, setLoading] = useState(() => !hasLoadedChatList && cachedChats.length === 0);
+  const [loading, setLoading] = useState(() => !hasHydratedChatList);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTabType>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const latestLoadIdRef = useRef(0);
 
-  // 1. Lắng nghe real-time conversations từ Firebase
-  useEffect(() => {
+  const applyConversations = useCallback(
+    async (
+      conversations: Conversation[],
+      uid: string,
+      mode: 'initial' | 'refresh' = 'initial'
+    ) => {
+      const shouldShowLoading = mode === 'initial' && !hasHydratedChatList && cachedChats.length === 0;
+      const loadId = ++latestLoadIdRef.current;
+
+      if (shouldShowLoading) {
+        setLoading(true);
+      }
+
+      if (mode === 'refresh') {
+        setRefreshing(true);
+      }
+
+      try {
+        const resolvedChats = await buildChatItems(conversations, uid);
+        if (loadId === latestLoadIdRef.current) {
+          cachedChats = resolvedChats;
+          hasHydratedChatList = true;
+          setChats(resolvedChats);
+        }
+      } catch (error) {
+        console.warn('Failed to resolve chat list:', error);
+        if (loadId === latestLoadIdRef.current) {
+          setChats([]);
+        }
+      } finally {
+        if (loadId === latestLoadIdRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    []
+  );
+
+  const refreshChats = useCallback(async () => {
     if (!currentUid) {
       cachedChats = [];
-      hasLoadedChatList = false;
+      hasHydratedChatList = false;
       setChats([]);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
-    setChats(cachedChats);
-    setLoading(!hasLoadedChatList && cachedChats.length === 0);
+    setRefreshing(true);
+    try {
+      const conversations = await getConversationsForUser(currentUid);
+      await applyConversations(conversations, currentUid, 'refresh');
+    } catch (error) {
+      setRefreshing(false);
+      throw error;
+    }
+  }, [applyConversations, currentUid]);
+
+  useEffect(() => {
+    if (!currentUid) {
+      cachedChats = [];
+      hasHydratedChatList = false;
+      setChats([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    if (cachedChats.length > 0) {
+      setChats(cachedChats);
+      setLoading(false);
+    } else {
+      setLoading(!hasHydratedChatList);
+    }
 
     const unsubscribe = subscribeToConversations(currentUid, async (conversations) => {
-      // Sort client-side — an toàn với null/undefined updatedAt (serverTimestamp pending)
-      const sortedConvs = [...conversations].sort((a, b) => {
-        const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
-        const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
-        return timeB - timeA;
-      });
-
-      // 2. Fetch thông tin user đối phương cho mỗi hội thoại
-      const chatPromises = sortedConvs.map(async (conv) => {
-        const otherUid = conv.participants.find((uid) => uid !== currentUid);
-        let otherUser = null;
-
-        if (otherUid && conv.type === 'private') {
-          try {
-            const userData = await getUserById(otherUid);
-            if (userData) {
-              otherUser = {
-                uid: userData.uid,
-                displayName: userData.displayName || userData.phoneNumber || 'User',
-                avatarUrl: userData.avatarUrl || '',
-                isOnline: userData.isOnline || false,
-              };
-            }
-          } catch (e) {
-            console.warn('Failed to load user:', otherUid);
-          }
-        }
-
-        // Đọc unread count thực từ Firestore conversation data
-        const unreadCount = conv.unreadCount?.[currentUid] || 0;
-
-        return { conversation: conv, otherUser, unreadCount } as ChatWithUser;
-      });
-
-      const results = await Promise.all(chatPromises);
-      cachedChats = results;
-      hasLoadedChatList = true;
-      setChats(results);
-      setLoading(false);
+      await applyConversations(conversations, currentUid);
     });
 
-    return unsubscribe;
-  }, [currentUid]);
+    return () => {
+      unsubscribe?.();
+    };
+  }, [applyConversations, currentUid]);
 
-  // 3. Filter theo Tab và Search
   const filteredChats = useMemo(() => {
     return chats.filter((chat) => {
-      // Filter tab
       if (activeTab === 'private' && chat.conversation.type !== 'private') return false;
       if (activeTab === 'group' && chat.conversation.type !== 'group') return false;
 
-      // Filter search
       if (searchQuery.trim()) {
-        const name = chat.conversation.type === 'group'
-          ? chat.conversation.groupName || ''
-          : chat.otherUser?.displayName || '';
+        const name =
+          chat.conversation.type === 'group'
+            ? chat.conversation.groupName || ''
+            : chat.otherUser?.displayName || '';
+
         if (!name.toLowerCase().includes(searchQuery.toLowerCase().trim())) {
           return false;
         }
@@ -96,37 +172,19 @@ export function useChatList() {
     });
   }, [chats, activeTab, searchQuery]);
 
-  // 4. Tính toán số lượng UNREAD cho từng Tab (giống Telegram)
-  const unreadCounts = useMemo(() => {
-    let all = 0;
-    let privateCount = 0;
-    let groupCount = 0;
-
-    chats.forEach((c) => {
-      const hasUnread = (c.unreadCount || 0) > 0;
-      if (hasUnread) {
-        all++;
-        if (c.conversation.type === 'private') privateCount++;
-        if (c.conversation.type === 'group') groupCount++;
-      }
-    });
-
-    return { all, private: privateCount, group: groupCount };
-  }, [chats]);
-
-  // 5. Tổng số tab counts (tổng conversations, dùng cho FilterTabs label count)
   const tabCounts = useMemo(() => {
     const all = chats.length;
     let privateCount = 0;
     let groupCount = 0;
-    chats.forEach((c) => {
-      if (c.conversation.type === 'private') privateCount++;
-      if (c.conversation.type === 'group') groupCount++;
+
+    chats.forEach((chat) => {
+      if (chat.conversation.type === 'private') privateCount++;
+      if (chat.conversation.type === 'group') groupCount++;
     });
+
     return { all, private: privateCount, group: groupCount };
   }, [chats]);
 
-  // 6. Tính tổng số tin nhắn chưa đọc (dùng cho badge bottom tab)
   const totalUnreadCount = useMemo(() => {
     return chats.reduce((total, chat) => total + (chat.unreadCount || 0), 0);
   }, [chats]);
@@ -134,12 +192,13 @@ export function useChatList() {
   return {
     chats: filteredChats,
     loading,
+    refreshing,
+    refreshChats,
     activeTab,
     setActiveTab,
     searchQuery,
     setSearchQuery,
     tabCounts,
-    unreadCounts,
     totalUnreadCount,
   };
 }

@@ -97,6 +97,7 @@ export interface MessageBubbleProps {
   senderName?: string;
   isHighlighted?: boolean;
   currentUid?: string;
+  showSeenLabel?: boolean;
   onLongPress?: (message: Message) => void;
   onImagePress?: (imageUrl: string) => void;
   onFilePress?: (fileUrl: string, fileName: string) => void;

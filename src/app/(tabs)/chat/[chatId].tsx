@@ -1,26 +1,53 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
+  Text,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Keyboard,
 } from 'react-native';
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Timestamp } from 'firebase/firestore';
+import * as Clipboard from 'expo-clipboard';
 import { Message } from '@/types/chat';
 import { formatLastSeen } from '@/constants/chat';
 import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
 import { useChatWallpaper } from '@/hooks/useChatWallpaper';
-import { markConversationAsRead } from '@/services/chatService';
+import { markConversationAsRead, toggleMuteConversation } from '@/services/chatService';
+import { setCurrentOpenChat } from '@/hooks/useNotificationListener';
 import ChatHeader from '@/components/chat/ChatHeader';
 import MessageBubble from '@/components/chat/MessageBubble';
 import MessageInput from '@/components/chat/MessageInput';
 import WallpaperPicker from '@/components/chat/WallpaperPicker';
 import ChatOptionsMenu from '@/components/chat/ChatOptionsMenu';
+import ChatSearchBar from '@/components/chat/ChatSearchBar';
+import AttachmentPicker from '@/components/chat/AttachmentPicker';
+import MediaViewer from '@/components/chat/MediaViewer';
+import MessageActionMenu from '@/components/chat/MessageActionMenu';
+import DateSeparator from '@/components/chat/DateSeparator';
+import PromptModal from '@/components/chat/PromptModal';
+import { getUserByPhone } from '@/services/userService';
+import { addMemberToGroup, leaveGroupConversation, updateGroupAvatar, updateGroupName } from '@/services/chatService';
+import { getComputedMessageStatus, shouldMarkConversationRead } from '@/services/chatReadState';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadImage } from '@/services/mediaService';
+
+// Separator key cho "Tin nhắn chưa đọc"
+const UNREAD_SEPARATOR_ID = '__unread_separator__';
+
+interface ListItem {
+  id: string;
+  type: 'message' | 'unread-separator' | 'date-separator';
+  message?: Message;
+  dateStr?: string;
+}
 
 export default function ChatDetailScreen() {
   const router = useRouter();
@@ -28,38 +55,313 @@ export default function ChatDetailScreen() {
   const { user } = useAuth();
   const currentUid = (user as any)?.uid || null;
 
-  const { conversation, otherUser } = useConversation(chatId || null, currentUid);
-  const { messages, loading, sending, sendTextMessage, sendImageMessage, loadMore, hasMore } =
+  const { conversation, otherUser, lastReadBy } = useConversation(chatId || null, currentUid);
+  const { messages, loading, loadingMore, sending, sendTextMessage, sendImageMessage, sendFileMessage, loadMore, hasMore, handleRevokeMessage, handleDeleteForMe, handleToggleReaction, handleEditMessage } =
     useMessages(chatId || null, currentUid);
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [pendingImage, setPendingImage] = useState<{ uri: string; fileName: string } | null>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
+  const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
+  const [mediaViewerUrl, setMediaViewerUrl] = useState<string | null>(null);
+  const [mediaViewerFileName, setMediaViewerFileName] = useState<string | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [initialLastRead, setInitialLastRead] = useState<Timestamp | null>(null);
+  // Search state
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResultIndex, setSearchResultIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  const scrolledToInitial = useRef(false);
+  const lastMarkedMessageIdRef = useRef<string | null>(null);
 
-  const { currentWallpaper, setWallpaper } = useChatWallpaper();
+  // Group features state
+  const [showAddMemberPrompt, setShowAddMemberPrompt] = useState(false);
+  const [showRenameGroupPrompt, setShowRenameGroupPrompt] = useState(false);
+
+  const { currentWallpaper, setWallpaper } = useChatWallpaper(chatId || null);
+
+  // Track current chat để notification biết bỏ qua
+  useEffect(() => {
+    setCurrentOpenChat(chatId || null);
+    return () => setCurrentOpenChat(null);
+  }, [chatId]);
+
+  // Keyboard listener
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  // Mute state
+  const isMuted = useMemo(() => {
+    if (!conversation || !currentUid) return false;
+    return conversation.mutedBy?.[currentUid] || false;
+  }, [conversation, currentUid]);
+
+  const handleToggleMute = useCallback(async () => {
+    if (!chatId || !currentUid) return;
+    await toggleMuteConversation(chatId, currentUid, !isMuted);
+  }, [chatId, currentUid, isMuted]);
+
+  // Group handlers
+  const handleAddMemberSubmit = useCallback(async (phone: string) => {
+    if (!chatId) return;
+    try {
+      const userToAdd = await getUserByPhone(phone);
+      if (!userToAdd) {
+        Alert.alert('Lỗi', 'Không tìm thấy người dùng với số điện thoại này.');
+        return;
+      }
+      if (conversation?.participants.includes(userToAdd.uid)) {
+        Alert.alert('Thông báo', 'Người dùng này đã ở trong nhóm.');
+        return;
+      }
+      await addMemberToGroup(chatId, userToAdd.uid);
+      Alert.alert('Thành công', 'Đã thêm thành viên vào nhóm.');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi thêm thành viên.');
+    }
+  }, [chatId, conversation]);
+
+  const handleChangeGroupAvatar = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Quyền truy cập bị từ chối', 'Ứng dụng cần quyền truy cập thư viện ảnh.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0].uri) {
+        const uploadRes = await uploadImage(result.assets[0].uri);
+        await updateGroupAvatar(chatId, uploadRes.url);
+        Alert.alert('Thành công', 'Đã cập nhật ảnh nhóm.');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi đổi ảnh nhóm.');
+    }
+  }, [chatId]);
+
+  const handleLeaveGroup = useCallback(() => {
+    if (!chatId || !currentUid) return;
+    Alert.alert(
+      'Rời nhóm',
+      'Bạn có chắc chắn muốn rời khỏi nhóm này không?',
+      [
+        { text: 'Huỷ', style: 'cancel' },
+        { 
+          text: 'Rời nhóm', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await leaveGroupConversation(chatId, currentUid);
+              router.back();
+            } catch (error) {
+              console.error(error);
+              Alert.alert('Lỗi', 'Có lỗi xảy ra khi rời nhóm.');
+            }
+          }
+        }
+      ]
+    );
+  }, [chatId, currentUid, router]);
+
+  const handleRenameGroupSubmit = useCallback(async (newName: string) => {
+    if (!chatId) return;
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      Alert.alert('Lỗi', 'Tên nhóm không được để trống.');
+      return;
+    }
+    try {
+      await updateGroupName(chatId, trimmed);
+      Alert.alert('Thành công', 'Đã đổi tên nhóm.');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi đổi tên nhóm.');
+    }
+  }, [chatId]);
+
+  // Lưu lastReadBy[currentUid] lần đầu khi mở chat (để biết tin nhắn nào chưa đọc)
+  useEffect(() => {
+    if (lastReadBy && currentUid && initialLastRead === null) {
+      const myLastRead = lastReadBy[currentUid] || undefined;
+      if (myLastRead) {
+        setInitialLastRead(myLastRead);
+      } else {
+        // Chưa từng đọc → dùng epoch 0 để TẤT CẢ tin nhắn đều là "chưa đọc"
+        // Nhưng nếu không muốn hiện separator khi chưa có lần đọc trước → scroll to end
+        setInitialLastRead(Timestamp.fromMillis(0));
+      }
+    }
+  }, [lastReadBy, currentUid, initialLastRead]);
+
+  // Mark conversation as read khi mở chat
+  useEffect(() => {
+    if (!shouldMarkConversationRead({ chatId, currentUid, loading, messageCount: messages.length })) {
+      return;
+    }
+
+    const latestMessageId = messages[messages.length - 1]?.id || null;
+    if (!latestMessageId || lastMarkedMessageIdRef.current === latestMessageId) {
+      return;
+    }
+
+    if (chatId && currentUid) {
+      markConversationAsRead(chatId, currentUid);
+      lastMarkedMessageIdRef.current = latestMessageId;
+    }
+  }, [chatId, currentUid, loading, messages]);
+
+  // Tìm otherUid
+  const otherUid = useMemo(() => {
+    if (!conversation || !currentUid) return null;
+    return conversation.participants.find((uid) => uid !== currentUid) || null;
+  }, [conversation, currentUid]);
+
+  const latestOutgoingMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const message = messages[i];
+      if (message.senderId === currentUid && !message.isRevoked) {
+        return message.id;
+      }
+    }
+
+    return null;
+  }, [messages, currentUid]);
+
+  // Build danh sách items: messages + unread separator + date separator
+  const listItems: ListItem[] = useMemo(() => {
+    if (messages.length === 0) return [];
+
+    const items: ListItem[] = [];
+    let separatorInserted = false;
+    const readMs = initialLastRead?.toMillis?.() || 0;
+    let lastDateStr = '';
+
+    for (const msg of messages) {
+      // 1. Chèn date separator nếu khác ngày
+      let msgDateStr = '';
+      if (msg.createdAt) {
+        const d = msg.createdAt.toDate();
+        msgDateStr = `${d.getDate()} tháng ${d.getMonth() + 1}`;
+      }
+
+      if (msgDateStr && msgDateStr !== lastDateStr) {
+        items.push({
+          id: `date_${msgDateStr}_${msg.id}`,
+          type: 'date-separator',
+          dateStr: msgDateStr,
+        });
+        lastDateStr = msgDateStr;
+      }
+
+      // 2. Chèn separator trước tin nhắn chưa đọc đầu tiên từ người khác
+      if (
+        !separatorInserted &&
+        msg.senderId !== currentUid &&
+        initialLastRead !== null &&
+        readMs > 0
+      ) {
+        const msgMs = msg.createdAt?.toMillis?.() || 0;
+        if (msgMs > readMs) {
+          items.push({ id: UNREAD_SEPARATOR_ID, type: 'unread-separator' });
+          separatorInserted = true;
+        }
+      }
+
+      // 3. Chèn tin nhắn
+      items.push({
+        id: msg.id,
+        type: 'message',
+        message: msg,
+      });
+    }
+
+    return items;
+  }, [messages, currentUid, initialLastRead]);
+
+  // Dữ liệu đảo ngược cho inverted FlatList (mới nhất ở đầu)
+  const invertedItems = useMemo(() => [...listItems].reverse(), [listItems]);
+
+  // Scroll đến unread separator 1 lần duy nhất sau khi load
+  useEffect(() => {
+    if (scrolledToInitial.current || invertedItems.length === 0) return;
+    scrolledToInitial.current = true;
+
+    const unreadIndex = invertedItems.findIndex(item => item.id === UNREAD_SEPARATOR_ID);
+    if (unreadIndex > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: unreadIndex,
+          animated: false,
+          viewPosition: 0.9,
+        });
+      }, 300);
+    }
+    // Không có separator → FlatList inverted tự hiện cuối (index 0 = tin mới nhất)
+  }, [invertedItems]);
 
   const isOutgoing = useCallback(
     (msg: Message) => msg.senderId === currentUid,
     [currentUid]
   );
 
-  // Đánh dấu đã đọc khi mở conversation
-  useEffect(() => {
-    if (!chatId || !currentUid) return;
-    markConversationAsRead(chatId, currentUid).catch(() => {});
-  }, [chatId, currentUid]);
-
-  // Đánh dấu đã đọc khi nhận tin nhắn mới trong khi đang mở chat
-  useEffect(() => {
-    if (!chatId || !currentUid || messages.length === 0) return;
-    markConversationAsRead(chatId, currentUid).catch(() => {});
-  }, [messages.length, chatId, currentUid]);
-
   const handleReply = useCallback((msg: Message) => {
     setReplyingTo(msg);
   }, []);
+
+  // Message action handlers
+  const handleCopy = useCallback((text: string) => {
+    Clipboard.setStringAsync(text);
+  }, []);
+
+  const handleEdit = useCallback((msg: Message) => {
+    setEditingMessage(msg);
+    setReplyingTo(null);
+  }, []);
+
+  const handleRevoke = useCallback((messageId: string) => {
+    Alert.alert('Thu hồi tin nhắn', 'Tin nhắn sẽ bị thu hồi cho cả 2 bên?', [
+      { text: 'Huỷ', style: 'cancel' },
+      { text: 'Thu hồi', style: 'destructive', onPress: () => handleRevokeMessage(messageId) },
+    ]);
+  }, [handleRevokeMessage]);
+
+  const handleDelete = useCallback((messageId: string) => {
+    Alert.alert('Xoá tin nhắn', 'Tin nhắn chỉ bị xoá ở phía bạn.', [
+      { text: 'Huỷ', style: 'cancel' },
+      { text: 'Xoá', style: 'destructive', onPress: () => handleDeleteForMe(messageId) },
+    ]);
+  }, [handleDeleteForMe]);
+
+  const handleReaction = useCallback((messageId: string, emoji: string) => {
+    handleToggleReaction(messageId, emoji);
+  }, [handleToggleReaction]);
 
   const handleSendText = useCallback(
     async (text: string) => {
@@ -77,68 +379,147 @@ export default function ChatDetailScreen() {
       setReplyingTo(null);
 
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
     },
     [replyingTo, sendTextMessage, otherUser, isOutgoing]
   );
 
-  // Chọn ảnh từ thư viện — KHÔNG gửi ngay, chỉ set pending
-  const handlePickImage = useCallback(async () => {
-    try {
-      const ImagePicker = await import('expo-image-picker');
-
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Cần quyền truy cập', 'Vui lòng cho phép truy cập thư viện ảnh.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.7,
-        allowsEditing: false,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const fileName = asset.fileName || `IMG_${Date.now()}.jpg`;
-        // Set pending image → MessageInput sẽ hiện preview
-        setPendingImage({ uri: asset.uri, fileName });
-      }
-    } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Lỗi', 'Không thể chọn ảnh.');
-    }
+  const handlePickImage = useCallback((uri: string, fileName: string) => {
+    setPendingImage({ uri, fileName });
   }, []);
 
-  // Gửi ảnh kèm caption từ MessageInput
+  const handlePickFile = useCallback(async (uri: string, fileName: string, fileSize: number, mimeType: string) => {
+    if (mimeType.startsWith('image/')) {
+      // Ảnh thì dùng flow gửi ảnh
+      setPendingImage({ uri, fileName });
+    } else {
+      // File thường: upload lên Cloudinary rồi gửi message
+      await sendFileMessage(uri, fileName, fileSize, mimeType);
+      setTimeout(() => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }, 100);
+    }
+  }, [sendFileMessage]);
+
   const handleSendImage = useCallback(
     async (uri: string, fileName: string, caption: string) => {
       setPendingImage(null);
       await sendImageMessage(uri, fileName, caption || undefined);
 
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
     },
     [sendImageMessage]
   );
 
-  const renderMessage = useCallback(
-    ({ item }: { item: Message }) => (
-      <MessageBubble
-        message={item}
-        isOutgoing={isOutgoing(item)}
-        senderName={otherUser?.displayName}
-        onReply={handleReply}
-        onImagePress={(url) => console.log('Open image:', url)}
-      />
-    ),
-    [isOutgoing, otherUser, handleReply]
+  // Search logic
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return messages
+      .map((msg, idx) => ({ msg, idx }))
+      .filter(({ msg }) => msg.text?.toLowerCase().includes(q));
+  }, [messages, searchQuery]);
+
+  const highlightedMessageId = useMemo(() => {
+    if (searchResults.length === 0) return null;
+    const safeIndex = Math.min(searchResultIndex, searchResults.length - 1);
+    return searchResults[safeIndex]?.msg.id || null;
+  }, [searchResults, searchResultIndex]);
+
+  // Scroll đến kết quả search trong inverted list
+  useEffect(() => {
+    if (!highlightedMessageId || invertedItems.length === 0) return;
+    const idx = invertedItems.findIndex(
+      (item) => item.id === highlightedMessageId
+    );
+    if (idx >= 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: idx,
+          animated: true,
+          viewPosition: 0.5,
+        });
+      }, 150);
+    }
+  }, [highlightedMessageId, invertedItems]);
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    setSearchResultIndex(0);
+  }, []);
+
+  const handleSearchNext = useCallback(() => {
+    setSearchResultIndex((prev) => Math.min(prev + 1, searchResults.length - 1));
+  }, [searchResults.length]);
+
+  const handleSearchPrev = useCallback(() => {
+    setSearchResultIndex((prev) => Math.max(prev - 1, 0));
+  }, []);
+
+  const renderItem = useCallback(
+    ({ item }: { item: ListItem }) => {
+      if (item.type === 'unread-separator') {
+        return (
+          <View style={styles.unreadSeparator}>
+            <View style={styles.unreadLine} />
+            <Text style={styles.unreadText}>Tin nhắn chưa đọc</Text>
+            <View style={styles.unreadLine} />
+          </View>
+        );
+      }
+
+      if (item.type === 'date-separator' && item.dateStr) {
+        return <DateSeparator date={item.dateStr} />;
+      }
+
+      if (!item.message) return null;
+
+      const computedStatus = getComputedMessageStatus({
+        message: item.message,
+        currentUid,
+        otherUid,
+        lastReadBy,
+      });
+      const renderedMessage =
+        item.message.status === computedStatus
+          ? item.message
+          : { ...item.message, status: computedStatus };
+      const showSeenLabel =
+        renderedMessage.senderId === currentUid &&
+        renderedMessage.status === 'read' &&
+        renderedMessage.id === latestOutgoingMessageId;
+
+      return (
+        <MessageBubble
+          message={renderedMessage}
+          isOutgoing={isOutgoing(renderedMessage)}
+          senderName={otherUser?.displayName}
+          isHighlighted={item.id === highlightedMessageId}
+          currentUid={currentUid || undefined}
+          showSeenLabel={showSeenLabel}
+          onLongPress={(msg) => setSelectedMessage(msg)}
+          onImagePress={(url) => setMediaViewerUrl(url)}
+          onFilePress={(url, name) => {
+            setMediaViewerUrl(url);
+            setMediaViewerFileName(name);
+          }}
+        />
+      );
+    },
+    [isOutgoing, otherUser, highlightedMessageId, currentUid, otherUid, lastReadBy, latestOutgoingMessageId]
   );
 
-  // Tính background color từ wallpaper
+  // Detect media type for viewer
+  const mediaViewerType: 'image' | 'video' | 'file' = mediaViewerUrl
+    ? (mediaViewerFileName
+      ? 'file'
+      : mediaViewerUrl.includes('/video/upload/') || /\.(mp4|mov|avi|mkv|webm|3gp)(\?|$)/i.test(mediaViewerUrl)
+        ? 'video' : 'image')
+    : 'image';
+
   const wallpaperBg = currentWallpaper.colors[0];
 
   if (loading) {
@@ -153,29 +534,58 @@ export default function ChatDetailScreen() {
     <View style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === 'ios' ? 'padding' : (isKeyboardVisible ? 'padding' : undefined)}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Header */}
-        <ChatHeader
-          userName={otherUser?.displayName || 'User'}
-          userAvatar={otherUser?.avatarUrl || ''}
-          lastSeen={formatLastSeen(otherUser?.lastSeen || null, otherUser?.isOnline || false)}
-          isOnline={otherUser?.isOnline || false}
-          onBackPress={() => router.back()}
-          onProfilePress={() =>
-            router.push({
-              pathname: '/(tabs)/chat/user-profile',
-              params: { userId: otherUser?.uid || '' },
-            })
-          }
-          onCallPress={() => Alert.alert('Cuộc gọi', 'Tính năng đang phát triển')}
-          onMenuPress={() => setShowOptionsMenu(true)}
-        />
+        {showSearch ? (
+          <ChatSearchBar
+            totalResults={searchResults.length}
+            currentIndex={searchResultIndex}
+            onSearch={handleSearch}
+            onNext={handleSearchNext}
+            onPrev={handleSearchPrev}
+            onClose={() => {
+              setShowSearch(false);
+              setSearchQuery('');
+              setSearchResultIndex(0);
+            }}
+          />
+        ) : conversation?.type === 'group' ? (
+          <ChatHeader
+            userName={conversation.groupName || 'Nhóm'}
+            userAvatar={conversation.groupAvatar || ''}
+            lastSeen={`${conversation.participants.length} thành viên`}
+            isOnline={false}
+            isGroup={true}
+            onBackPress={() => router.back()}
+            onProfilePress={() =>
+              router.push({
+                pathname: '/(tabs)/chat/group-profile',
+                params: { conversationId: chatId || '' },
+              })
+            }
+            onMenuPress={() => setShowOptionsMenu(true)}
+          />
+        ) : (
+          <ChatHeader
+            userName={otherUser?.displayName || 'User'}
+            userAvatar={otherUser?.avatarUrl || ''}
+            lastSeen={formatLastSeen(otherUser?.lastSeen || null, otherUser?.isOnline || false)}
+            isOnline={otherUser?.isOnline || false}
+            isGroup={false}
+            onBackPress={() => router.back()}
+            onProfilePress={() =>
+              router.push({
+                pathname: '/(tabs)/chat/user-profile',
+                params: { userId: otherUser?.uid || '', conversationId: chatId || '' },
+              })
+            }
+            onCallPress={() => Alert.alert('Cuộc gọi', 'Tính năng đang phát triển')}
+            onMenuPress={() => setShowOptionsMenu(true)}
+          />
+        )}
 
-        {/* Messages area with wallpaper background */}
         <View style={[styles.messagesArea, { backgroundColor: wallpaperBg }]}>
-          {/* Gradient overlay for two-tone wallpapers */}
           {currentWallpaper.type === 'gradient' && currentWallpaper.colors.length >= 2 && (
             <View
               style={[
@@ -190,29 +600,37 @@ export default function ChatDetailScreen() {
 
           <FlatList
             ref={flatListRef}
-            data={messages}
-            renderItem={renderMessage}
+            data={invertedItems}
+            renderItem={renderItem}
             keyExtractor={(item) => item.id}
+            inverted
             contentContainerStyle={styles.messagesContent}
             showsVerticalScrollIndicator={false}
             onEndReached={hasMore ? loadMore : undefined}
             onEndReachedThreshold={0.3}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.loadingMoreContainer}>
+                  <ActivityIndicator size="small" color="#50A8EB" />
+                </View>
+              ) : null
+            }
             initialNumToRender={15}
             maxToRenderPerBatch={10}
             windowSize={10}
             removeClippedSubviews={Platform.OS === 'android'}
-            onContentSizeChange={() => {
-              if (messages.length > 0) {
-                flatListRef.current?.scrollToEnd({ animated: false });
-              }
+            onScrollToIndexFailed={(info) => {
+              flatListRef.current?.scrollToOffset({
+                offset: info.averageItemLength * info.index,
+                animated: false,
+              });
             }}
           />
         </View>
 
-        {/* Input bar */}
         <MessageInput
           onSendText={handleSendText}
-          onPickImage={handlePickImage}
+          onAttach={() => setShowAttachmentPicker(true)}
           onSendImage={handleSendImage}
           pendingImage={pendingImage}
           onCancelImage={() => setPendingImage(null)}
@@ -225,22 +643,90 @@ export default function ChatDetailScreen() {
               : undefined
           }
           onCancelReply={() => setReplyingTo(null)}
+          editingMessage={editingMessage}
+          onCancelEdit={() => setEditingMessage(null)}
+          onSaveEdit={(messageId, newText) => {
+            handleEditMessage(messageId, newText);
+            setEditingMessage(null);
+          }}
         />
       </KeyboardAvoidingView>
 
-      {/* Chat options menu */}
       <ChatOptionsMenu
         visible={showOptionsMenu}
         onClose={() => setShowOptionsMenu(false)}
         onChangeWallpaper={() => setShowWallpaperPicker(true)}
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
+        onSearch={() => setShowSearch(true)}
+        onAddContact={() => {
+          Alert.alert('Thêm vào danh bạ', 'Tính năng đang phát triển');
+        }}
+        conversationType={conversation?.type || 'private'}
+        onAddMember={() => setShowAddMemberPrompt(true)}
+        onChangeGroupAvatar={handleChangeGroupAvatar}
+        onRenameGroup={() => setShowRenameGroupPrompt(true)}
+        onLeaveGroup={handleLeaveGroup}
       />
 
-      {/* Wallpaper picker */}
       <WallpaperPicker
         visible={showWallpaperPicker}
         onClose={() => setShowWallpaperPicker(false)}
         currentWallpaperId={currentWallpaper.id}
         onSelect={setWallpaper}
+      />
+
+      <AttachmentPicker
+        visible={showAttachmentPicker}
+        onClose={() => setShowAttachmentPicker(false)}
+        onPickImage={handlePickImage}
+        onPickFile={handlePickFile}
+      />
+
+      <MediaViewer
+        visible={!!mediaViewerUrl}
+        mediaUrl={mediaViewerUrl || ''}
+        mediaType={mediaViewerType}
+        fileName={mediaViewerFileName || undefined}
+        onClose={() => {
+          setMediaViewerUrl(null);
+          setMediaViewerFileName(null);
+        }}
+      />
+
+      <MessageActionMenu
+        visible={!!selectedMessage}
+        message={selectedMessage}
+        isOutgoing={selectedMessage ? isOutgoing(selectedMessage) : false}
+        onClose={() => setSelectedMessage(null)}
+        onReply={(msg) => {
+          setSelectedMessage(null);
+          handleReply(msg);
+        }}
+        onCopy={handleCopy}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onRevoke={handleRevoke}
+        onReaction={handleReaction}
+      />
+
+      <PromptModal
+        visible={showAddMemberPrompt}
+        title="Thêm thành viên"
+        description="Nhập số điện thoại của người dùng bạn muốn thêm vào nhóm."
+        placeholder="Nhập số điện thoại..."
+        keyboardType="phone-pad"
+        onClose={() => setShowAddMemberPrompt(false)}
+        onSubmit={handleAddMemberSubmit}
+      />
+
+      <PromptModal
+        visible={showRenameGroupPrompt}
+        title="Đổi tên nhóm"
+        description="Nhập tên mới cho nhóm."
+        placeholder="Tên nhóm mới..."
+        onClose={() => setShowRenameGroupPrompt(false)}
+        onSubmit={handleRenameGroupSubmit}
       />
     </View>
   );
@@ -266,5 +752,30 @@ const styles = StyleSheet.create({
   messagesContent: {
     paddingVertical: 8,
     paddingHorizontal: 4,
+  },
+  // ======= Unread Separator =======
+  unreadSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  unreadLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#50A8EB',
+    opacity: 0.4,
+  },
+  unreadText: {
+    color: '#50A8EB',
+    fontSize: 14,
+    fontWeight: '600',
+    marginHorizontal: 12,
+  },
+  // ======= Loading More =======
+  loadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -1,30 +1,39 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { AppUser, onAuthStateChange, signOutUser, updateLastActive } from '@/services/auth';
+import { AuthUser, onAuthStateChange, signOutUser, updateLastActive, refreshAuthUser } from '@/services/auth';
 
 interface AuthContextType {
-  user: AppUser | null;
+  user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isVerifying: boolean;
+  setIsVerifying: (v: boolean) => void;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  updateAvatarUrl: (url: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
+  isVerifying: false,
+  setIsVerifying: () => {},
   logout: async () => {},
+  refreshUser: async () => {},
+  updateAvatarUrl: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AppUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((appUser) => {
-      console.log('[AuthContext] Auth state changed:', appUser ? `uid=${appUser.uid}` : 'null');
-      setUser(appUser);
+    const unsubscribe = onAuthStateChange((firebaseUser) => {
+      console.log('[AuthContext] Auth state changed:', firebaseUser ? `uid=${(firebaseUser as any).uid}` : 'null');
+      setUser(firebaseUser);
       setIsLoading(false);
     });
     return unsubscribe;
@@ -63,13 +72,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    await refreshAuthUser();
+  };
+
+  // Cập nhật avatarUrl trong AuthContext ngay lập tức (không cần đọc lại AsyncStorage)
+  const updateAvatarUrl = (url: string | null) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      return { ...prev, avatarUrl: url ?? '', photoURL: url ?? '' };
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         isLoading,
         isAuthenticated: !!user,
+        isVerifying,
+        setIsVerifying,
         logout,
+        refreshUser,
+        updateAvatarUrl,
       }}
     >
       {children}
