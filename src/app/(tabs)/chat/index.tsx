@@ -37,7 +37,7 @@ export default function ChatsScreen() {
     setActiveTab,
     searchQuery,
     setSearchQuery,
-    tabCounts,
+    unreadCounts,
   } = useChatList();
 
   // New chat modal states
@@ -118,9 +118,9 @@ export default function ChatsScreen() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           tabs={[
-            { id: 'all', label: 'Tất cả', count: tabCounts.all },
-            { id: 'private', label: 'Cá nhân', count: tabCounts.private },
-            { id: 'group', label: 'Nhóm', count: tabCounts.group },
+            { id: 'all', label: 'Tất cả', count: unreadCounts.all || undefined },
+            { id: 'private', label: 'Cá nhân', count: unreadCounts.private || undefined },
+            { id: 'group', label: 'Nhóm', count: unreadCounts.group || undefined },
           ]}
         />
 

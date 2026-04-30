@@ -16,6 +16,7 @@ import {
   DocumentSnapshot,
   QueryDocumentSnapshot,
   updateDoc,
+  increment,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Message, Conversation, MessageType, ReplyTo } from '@/types/chat';
@@ -24,6 +25,204 @@ import { Message, Conversation, MessageType, ReplyTo } from '@/types/chat';
 function getDb() {
   if (!db) throw new Error('Firestore not initialized. Check Firebase config.');
   return db;
+}
+
+function arraysEqual(a: string[], b: string[]) {
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
+function timestampMillis(value: any): number {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  return 0;
+}
+
+async function commitBatchIfNeeded(
+  batchRef: { current: ReturnType<typeof writeBatch> },
+  writesRef: { current: number },
+  force: boolean = false
+) {
+  if (!force && writesRef.current < 400) return;
+  if (writesRef.current === 0) return;
+
+  await batchRef.current.commit();
+  batchRef.current = writeBatch(getDb());
+  writesRef.current = 0;
+}
+
+async function mergePrivateConversations(
+  sourceConvId: string,
+  targetConvId: string,
+  fromUid: string,
+  toUid: string,
+  sourceData: Conversation,
+  targetData: Conversation
+) {
+  const firestore = getDb();
+  const sourceMessagesRef = collection(firestore, 'conversations', sourceConvId, 'messages');
+  const targetMessagesRef = collection(firestore, 'conversations', targetConvId, 'messages');
+  const sourceMessagesSnap = await getDocs(sourceMessagesRef);
+  const targetMessagesSnap = await getDocs(targetMessagesRef);
+  const targetMessageIds = new Set(targetMessagesSnap.docs.map((docSnap) => docSnap.id));
+
+  const batchRef = { current: writeBatch(firestore) };
+  const writesRef = { current: 0 };
+
+  for (const messageDoc of sourceMessagesSnap.docs) {
+    const data = messageDoc.data();
+    const normalizedSenderId = data.senderId === fromUid ? toUid : data.senderId;
+
+    if (!targetMessageIds.has(messageDoc.id)) {
+      const targetMessageRef = doc(targetMessagesRef, messageDoc.id);
+      batchRef.current.set(targetMessageRef, {
+        ...data,
+        conversationId: targetConvId,
+        senderId: normalizedSenderId,
+      });
+      writesRef.current++;
+    }
+
+    batchRef.current.delete(messageDoc.ref);
+    writesRef.current++;
+    await commitBatchIfNeeded(batchRef, writesRef);
+  }
+
+  const sourceUpdatedAt = timestampMillis(sourceData.updatedAt);
+  const targetUpdatedAt = timestampMillis(targetData.updatedAt);
+  const sourceLastMessageAt = timestampMillis(sourceData.lastMessage?.timestamp);
+  const targetLastMessageAt = timestampMillis(targetData.lastMessage?.timestamp);
+
+  const targetConvRef = doc(firestore, 'conversations', targetConvId);
+  const sourceConvRef = doc(firestore, 'conversations', sourceConvId);
+
+  const targetParticipants = Array.from(
+    new Set([...(targetData.participants || []), ...(sourceData.participants || [])].map((uid) => uid === fromUid ? toUid : uid))
+  );
+
+  const updatePayload: Record<string, any> = {
+    participants: targetParticipants,
+  };
+
+  if (sourceUpdatedAt > targetUpdatedAt) {
+    updatePayload.updatedAt = sourceData.updatedAt;
+  }
+
+  if (sourceData.lastMessage && sourceLastMessageAt >= targetLastMessageAt) {
+    updatePayload.lastMessage = {
+      ...sourceData.lastMessage,
+      senderId: sourceData.lastMessage.senderId === fromUid ? toUid : sourceData.lastMessage.senderId,
+    };
+  } else if (targetData.lastMessage?.senderId === fromUid) {
+    updatePayload.lastMessage = {
+      ...targetData.lastMessage,
+      senderId: toUid,
+    };
+  }
+
+  batchRef.current.update(targetConvRef, updatePayload);
+  writesRef.current++;
+  batchRef.current.delete(sourceConvRef);
+  writesRef.current++;
+
+  await commitBatchIfNeeded(batchRef, writesRef, true);
+}
+
+export async function migrateUserConversationReferences(
+  fromUid: string,
+  toUid: string
+): Promise<{ conversationsUpdated: number; conversationsMerged: number; messagesUpdated: number }> {
+  const firestore = getDb();
+
+  if (!fromUid || !toUid || fromUid === toUid) {
+    return { conversationsUpdated: 0, conversationsMerged: 0, messagesUpdated: 0 };
+  }
+
+  const convRef = collection(firestore, 'conversations');
+  const convQuery = query(convRef, where('participants', 'array-contains', fromUid));
+  const convSnap = await getDocs(convQuery);
+
+  let conversationsUpdated = 0;
+  let conversationsMerged = 0;
+  let messagesUpdated = 0;
+
+  const batchRef = { current: writeBatch(firestore) };
+  const writesRef = { current: 0 };
+
+  for (const convDoc of convSnap.docs) {
+    const data = { id: convDoc.id, ...convDoc.data() } as Conversation;
+    const nextParticipants = Array.from(
+      new Set((data.participants || []).map((uid) => (uid === fromUid ? toUid : uid)))
+    );
+
+    if (data.type === 'private' && nextParticipants.length === 2) {
+      const candidateQuery = query(
+        convRef,
+        where('participants', 'array-contains', toUid),
+        where('type', '==', 'private')
+      );
+      const candidateSnap = await getDocs(candidateQuery);
+      const duplicate = candidateSnap.docs.find((candidate) => {
+        if (candidate.id === convDoc.id) return false;
+        const participants = (candidate.data().participants || []) as string[];
+        const normalized = Array.from(new Set(participants.map((uid) => (uid === fromUid ? toUid : uid))));
+        return arraysEqual([...normalized].sort(), [...nextParticipants].sort());
+      });
+
+      if (duplicate) {
+        await commitBatchIfNeeded(batchRef, writesRef, true);
+        await mergePrivateConversations(
+          convDoc.id,
+          duplicate.id,
+          fromUid,
+          toUid,
+          data,
+          { id: duplicate.id, ...duplicate.data() } as Conversation
+        );
+        conversationsMerged++;
+        continue;
+      }
+    }
+
+    const updatePayload: Record<string, any> = {};
+    if (!arraysEqual(data.participants || [], nextParticipants)) {
+      updatePayload.participants = nextParticipants;
+    }
+
+    if (data.lastMessage?.senderId === fromUid) {
+      updatePayload.lastMessage = {
+        ...data.lastMessage,
+        senderId: toUid,
+      };
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      batchRef.current.update(convDoc.ref, updatePayload);
+      writesRef.current++;
+      conversationsUpdated++;
+      await commitBatchIfNeeded(batchRef, writesRef);
+    }
+
+    const messagesRef = collection(firestore, 'conversations', convDoc.id, 'messages');
+    const messagesQuery = query(messagesRef, where('senderId', '==', fromUid));
+    const messagesSnap = await getDocs(messagesQuery);
+
+    for (const messageDoc of messagesSnap.docs) {
+      batchRef.current.update(messageDoc.ref, { senderId: toUid });
+      writesRef.current++;
+      messagesUpdated++;
+      await commitBatchIfNeeded(batchRef, writesRef);
+    }
+  }
+
+  await commitBatchIfNeeded(batchRef, writesRef, true);
+
+  return {
+    conversationsUpdated,
+    conversationsMerged,
+    messagesUpdated,
+  };
 }
 
 // ==================== Conversations ====================
@@ -120,6 +319,18 @@ export async function sendMessage(
   batch.set(messageRef, messageData);
 
   const convRef = doc(firestore, 'conversations', conversationId);
+
+  // Tăng unreadCount cho tất cả participants trừ người gửi
+  const convSnap = await getDoc(convRef);
+  const convData = convSnap.data();
+  const participants: string[] = convData?.participants || [];
+  const unreadUpdate: Record<string, any> = {};
+  participants.forEach((uid) => {
+    if (uid !== senderId) {
+      unreadUpdate[`unreadCount.${uid}`] = increment(1);
+    }
+  });
+
   batch.update(convRef, {
     lastMessage: {
       text: type === 'image' ? (text ? `📷 ${text}` : '📷 Ảnh') : text,
@@ -128,6 +339,7 @@ export async function sendMessage(
       type,
     },
     updatedAt: serverTimestamp(),
+    ...unreadUpdate,
   });
 
   await batch.commit();
@@ -211,6 +423,19 @@ export async function getMediaMessages(conversationId: string): Promise<Message[
   return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Message));
 }
 
+// ==================== Unread ====================
+
+export async function markConversationAsRead(
+  conversationId: string,
+  uid: string
+): Promise<void> {
+  const firestore = getDb();
+  const convRef = doc(firestore, 'conversations', conversationId);
+  await updateDoc(convRef, {
+    [`unreadCount.${uid}`]: 0,
+  });
+}
+
 // ==================== Conversations List ====================
 
 export function subscribeToConversations(
@@ -221,8 +446,7 @@ export function subscribeToConversations(
   const convRef = collection(firestore, 'conversations');
   const q = query(
     convRef,
-    where('participants', 'array-contains', uid),
-    orderBy('updatedAt', 'desc')
+    where('participants', 'array-contains', uid)
   );
 
   return onSnapshot(q, (snapshot) => {

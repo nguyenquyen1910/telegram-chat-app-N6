@@ -26,6 +26,7 @@ interface ChatItemProps {
 export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItemProps) => {
   const { conversation, otherUser, unreadCount = 0 } = chat;
   const isGroup = conversation.type === 'group';
+  const hasUnread = unreadCount > 0 && !isMuted;
 
   // Determine avatar and name
   const name = isGroup 
@@ -36,23 +37,14 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
     : otherUser?.avatarUrl;
   const isOnline = isGroup ? false : (otherUser?.isOnline || false);
 
-  // Determine last message text and tick
+  // Determine last message text
   const lastMsg = conversation.lastMessage;
   let lastMsgText = 'Bắt đầu cuộc trò chuyện';
   if (lastMsg) {
     if (lastMsg.type === 'image') lastMsgText = '📷 Ảnh';
     if (lastMsg.type === 'voice') lastMsgText = '🎤 Tin nhắn thoại';
     if (lastMsg.type === 'text' || lastMsg.type === 'reply') lastMsgText = lastMsg.text || '';
-    
-    // Add sender name prefix for groups
-    if (isGroup && lastMsg.senderId !== 'user_me') { // Assuming 'user_me' handles your own messages, but we will rely on names
-       // We don't have all names easily here without a map, but if lastMsg has senderName we could use it
-    }
   }
-
-  // Check if last message was sent by the current user
-  // This is a naive check, ideally we compare with current context UID
-  const isSentByMe = lastMsg?.senderId ? false : false; // Placeholder
 
   return (
     <TouchableHighlight 
@@ -60,7 +52,7 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
       underlayColor="#E5E5EA"
       activeOpacity={1}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, hasUnread && styles.containerUnread]}>
         <Avatar uri={avatarUrl} name={name} isOnline={isOnline} />
         
         <View style={styles.content}>
@@ -69,7 +61,7 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
               {isGroup && (
                 <Ionicons name="people" size={16} color="#8E8E93" style={styles.groupIcon} />
               )}
-              <Text style={styles.name} numberOfLines={1}>
+              <Text style={[styles.name, hasUnread && styles.nameUnread]} numberOfLines={1}>
                 {name}
               </Text>
               {isMuted && (
@@ -78,7 +70,7 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
             </View>
             
             {lastMsg?.timestamp && (
-              <Text style={[styles.time, unreadCount > 0 && !isMuted ? styles.timeUnread : null]}>
+              <Text style={[styles.time, hasUnread ? styles.timeUnread : null]}>
                 {formatMessageTime(lastMsg.timestamp)}
               </Text>
             )}
@@ -86,8 +78,10 @@ export const ChatItem = React.memo(({ chat, onPress, isMuted = false }: ChatItem
           
           <View style={styles.bottomRow}>
             <View style={styles.lastMsgContainer}>
-              {/* Could show double tick here if sent by me */}
-              <Text style={styles.lastMsg} numberOfLines={2}>
+              <Text
+                style={[styles.lastMsg, hasUnread && styles.lastMsgUnread]}
+                numberOfLines={2}
+              >
                 {lastMsgText}
               </Text>
             </View>
@@ -111,6 +105,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
+  },
+  containerUnread: {
+    backgroundColor: '#F0F7FF', // subtle blue tint for unread rows
   },
   content: {
     flex: 1,
@@ -144,12 +141,16 @@ const styles = StyleSheet.create({
     color: '#000000',
     flexShrink: 1,
   },
+  nameUnread: {
+    fontWeight: '700', // extra bold khi có tin chưa đọc
+  },
   time: {
     fontSize: 14,
     color: '#8E8E93',
   },
   timeUnread: {
-    color: '#54A5E8', // Telegram blue for unread
+    color: '#54A5E8',
+    fontWeight: '600',
   },
   bottomRow: {
     flexDirection: 'row',
@@ -166,6 +167,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#8E8E93',
     lineHeight: 20,
+  },
+  lastMsgUnread: {
+    color: '#000000', // Đen đậm thay vì xám khi có tin chưa đọc
+    fontWeight: '500',
   },
   badgeContainer: {
     paddingTop: 2,

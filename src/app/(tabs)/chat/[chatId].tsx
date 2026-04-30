@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   FlatList,
@@ -15,6 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversation } from '@/hooks/useConversation';
 import { useChatWallpaper } from '@/hooks/useChatWallpaper';
+import { markConversationAsRead } from '@/services/chatService';
 import ChatHeader from '@/components/chat/ChatHeader';
 import MessageBubble from '@/components/chat/MessageBubble';
 import MessageInput from '@/components/chat/MessageInput';
@@ -43,6 +44,18 @@ export default function ChatDetailScreen() {
     (msg: Message) => msg.senderId === currentUid,
     [currentUid]
   );
+
+  // Đánh dấu đã đọc khi mở conversation
+  useEffect(() => {
+    if (!chatId || !currentUid) return;
+    markConversationAsRead(chatId, currentUid).catch(() => {});
+  }, [chatId, currentUid]);
+
+  // Đánh dấu đã đọc khi nhận tin nhắn mới trong khi đang mở chat
+  useEffect(() => {
+    if (!chatId || !currentUid || messages.length === 0) return;
+    markConversationAsRead(chatId, currentUid).catch(() => {});
+  }, [messages.length, chatId, currentUid]);
 
   const handleReply = useCallback((msg: Message) => {
     setReplyingTo(msg);
