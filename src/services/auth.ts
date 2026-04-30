@@ -4,7 +4,7 @@ import {
   signOut as firebaseSignOut,
   signInAnonymously,
 } from 'firebase/auth';
-import { doc, setDoc, getDocs, query, where, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDocs, query, where, collection, serverTimestamp, updateDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ======= EMAIL OTP CONFIG =======
@@ -337,6 +337,40 @@ export const loginUser = async (phoneNumber: string): Promise<any> => {
   console.log(`[AUTH] User logged in: ${userData.uid}`);
   emitAuthState(userData as AuthUser);
   return userData;
+};
+
+// ============ CHANGE PHONE NUMBER ============
+
+/**
+ * Cập nhật số điện thoại mới trong Firestore + AsyncStorage.
+ * Gọi sau khi OTP đã được xác minh thành công.
+ */
+export const changePhoneNumber = async (
+  uid: string,
+  newPhone: string
+): Promise<void> => {
+  // 1. Cập nhật Firestore
+  if (db) {
+    try {
+      await updateDoc(doc(db, 'users', uid), { phoneNumber: newPhone });
+      console.log(`[DB] Phone updated for ${uid}: ${newPhone}`);
+    } catch (e) {
+      console.warn('[DB] Failed to update phone in Firestore:', e);
+    }
+  }
+
+  // 2. Cập nhật AsyncStorage
+  try {
+    const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+    if (stored) {
+      const userData = JSON.parse(stored) as AuthUser;
+      const updated = { ...userData, phoneNumber: newPhone };
+      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+      emitAuthState(updated);
+    }
+  } catch (e) {
+    console.warn('[AUTH] Failed to update phone in AsyncStorage:', e);
+  }
 };
 
 // ============ LOGOUT & AUTH STATE ============

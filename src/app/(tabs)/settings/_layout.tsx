@@ -11,6 +11,9 @@ export default function SettingsLayout() {
       <Stack.Screen name="data-storage" options={{ headerShown: false }} />
       <Stack.Screen name="appearance" options={{ headerShown: false }} />
       <Stack.Screen name="language" options={{ headerShown: false }} />
+      <Stack.Screen name="change-phone" options={{ headerShown: false }} />
+      <Stack.Screen name="change-phone-new" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="change-phone-verify" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
     </Stack>
   );
 }
