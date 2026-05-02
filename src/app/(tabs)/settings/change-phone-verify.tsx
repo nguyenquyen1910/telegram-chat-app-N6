@@ -8,7 +8,6 @@ import {
     Alert,
     ActivityIndicator,
     StatusBar,
-    Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,8 +15,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { verifySmsOTP, changePhoneNumber } from '@/services/auth';
 import { useAuth } from '@/context/AuthContext';
 import { formatPhoneNumber } from '@/utils/format';
+import { Image } from 'expo-image';
 
 const CODE_LENGTH = 6;
+
+// (Đã chuyển sang sử dụng expo-image và local asset để tối ưu tốc độ)
 
 export default function ChangePhoneVerifyScreen() {
     const { newPhone } = useLocalSearchParams<{ newPhone: string }>();
@@ -103,31 +105,20 @@ export default function ChangePhoneVerifyScreen() {
 
             {/* ── Content card ─────────────────────────────────────────── */}
             <View style={s.content}>
-                {/* Icon vòng tròn */}
-                <View style={s.iconRing}>
-                    <Ionicons name="phone-portrait-outline" size={36} color={BLUE} />
+                {/* Sticker */}
+                <View style={s.illustrationWrap}>
+                    <Image
+                        source={require('@/assets/stickers/speech_balloon.webp')}
+                        style={StyleSheet.absoluteFill}
+                        contentFit="contain"
+                    />
                 </View>
 
-                <Text style={s.title}>Nhập mã SMS</Text>
-
-                {/* Số mới hiển thị */}
-                <View style={s.phoneChip}>
-                    <Ionicons name="call-outline" size={15} color={BLUE} />
-                    <Text style={s.phoneChipText}>{formatPhoneNumber(newPhone)}</Text>
-                </View>
+                <Text style={s.title}>Nhập mã code</Text>
 
                 <Text style={s.hint}>
-                    Mã xác thực đã được gửi đến số điện thoại trên.
+                    Chúng tôi đã gửi một tin nhắn SMS chứa mã kích hoạt tới điện thoại của bạn <Text style={s.hintPhone}>{formatPhoneNumber(newPhone)}</Text>
                 </Text>
-
-                {/* ── Dev badge ── */}
-                <View style={s.devBadge}>
-                    <Ionicons name="code-slash-outline" size={14} color="#856404" />
-                    <Text style={s.devText}>
-                        Chế độ phát triển: nhập mã{' '}
-                        <Text style={s.devCode}>123456</Text>
-                    </Text>
-                </View>
 
                 {/* ── OTP boxes ── */}
                 <TouchableOpacity
@@ -191,98 +182,73 @@ const BG = '#F2F2F7';
 const SEP = 'rgba(60,60,67,0.29)';
 
 const s = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: BG },
-    safeTop: { backgroundColor: BG },
+    screen: { flex: 1, backgroundColor: '#FFFFFF' },
+    safeTop: { backgroundColor: '#FFFFFF' },
 
-    // Header – giống edit-profile
+    // Header
     header: {
         height: 52,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: 4,
-        backgroundColor: BG,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: SEP,
+        backgroundColor: '#FFFFFF',
     },
     backBtn: {
         width: 44, height: 44,
         justifyContent: 'center', alignItems: 'center',
     },
     backArrow: {
-        fontSize: 40, color: BLUE,
-        lineHeight: 48, marginTop: -6, fontWeight: '300',
+        fontSize: 32, color: '#000',
+        lineHeight: 38, fontWeight: '300',
     },
     headerTitle: {
-        fontSize: 17, fontWeight: '600', color: '#000',
+        display: 'none',
     },
 
     // Content
     content: {
         flex: 1,
         alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingTop: 36,
+        paddingHorizontal: 32,
+        paddingTop: 40,
+        backgroundColor: '#FFFFFF',
     },
 
-    // Icon
-    iconRing: {
-        width: 76, height: 76, borderRadius: 38,
-        backgroundColor: '#E8F2FF',
-        justifyContent: 'center', alignItems: 'center',
-        marginBottom: 20,
+    // Sticker
+    illustrationWrap: {
+        width: 100, height: 100,
+        marginBottom: 16,
+        backgroundColor: 'transparent',
     },
 
     title: {
-        fontSize: 22, fontWeight: '700',
-        color: '#000', marginBottom: 16,
-    },
-
-    // Phone chip
-    phoneChip: {
-        flexDirection: 'row', alignItems: 'center', gap: 6,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        paddingHorizontal: 16, paddingVertical: 8,
-        marginBottom: 12,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: SEP,
-    },
-    phoneChipText: {
-        fontSize: 15, fontWeight: '600', color: '#000',
+        fontSize: 24, fontWeight: '700',
+        color: '#000', marginBottom: 12,
     },
 
     hint: {
-        fontSize: 14, color: '#8E8E93',
-        textAlign: 'center', lineHeight: 20,
-        marginBottom: 20, paddingHorizontal: 8,
+        fontSize: 15, color: '#8E8E93',
+        textAlign: 'center', lineHeight: 22,
+        marginBottom: 32,
     },
-
-    // Dev badge
-    devBadge: {
-        flexDirection: 'row', alignItems: 'center', gap: 6,
-        backgroundColor: '#FFF9C4',
-        borderRadius: 8,
-        paddingVertical: 7, paddingHorizontal: 14,
-        marginBottom: 28,
+    hintPhone: {
+        fontWeight: '600', color: '#000',
     },
-    devText: { fontSize: 13, color: '#856404' },
-    devCode: { fontWeight: '700', fontFamily: 'monospace' },
 
     // OTP boxes
     codeRow: {
-        flexDirection: 'row', gap: 10,
+        flexDirection: 'row', gap: 8,
         marginBottom: 8,
     },
     box: {
-        width: 46, height: 54, borderRadius: 12,
-        borderWidth: 1.5, borderColor: '#D1D1D6',
+        width: 44, height: 54, borderRadius: 10,
+        borderWidth: 1, borderColor: '#D1D1D6',
         backgroundColor: '#FFFFFF',
         justifyContent: 'center', alignItems: 'center',
     },
-    boxFilled: { borderColor: BLUE, backgroundColor: '#EEF5FF' },
-    boxActive: { borderColor: BLUE, borderWidth: 2 },
-    boxDigit: { fontSize: 24, fontWeight: '700', color: '#000' },
+    boxFilled: { borderColor: '#D1D1D6', backgroundColor: '#FFFFFF' },
+    boxActive: { borderColor: '#3882F8', borderWidth: 2 },
+    boxDigit: { fontSize: 24, fontWeight: '600', color: '#000' },
 
     hiddenInput: { position: 'absolute', opacity: 0, height: 0, width: 0 },
 

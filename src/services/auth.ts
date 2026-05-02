@@ -373,6 +373,34 @@ export const changePhoneNumber = async (
   }
 };
 
+/**
+ * Cập nhật tên hiển thị trong Firestore + AsyncStorage.
+ */
+export const changeDisplayName = async (
+  uid: string,
+  newDisplayName: string
+): Promise<void> => {
+  if (db) {
+    try {
+      await updateDoc(doc(db, 'users', uid), { displayName: newDisplayName });
+    } catch (e) {
+      console.warn('[DB] Failed to update displayName in Firestore:', e);
+    }
+  }
+
+  try {
+    const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+    if (stored) {
+      const userData = JSON.parse(stored) as AuthUser;
+      const updated = { ...userData, displayName: newDisplayName };
+      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+      emitAuthState(updated);
+    }
+  } catch (e) {
+    console.warn('[AUTH] Failed to update displayName in AsyncStorage:', e);
+  }
+};
+
 // ============ LOGOUT & AUTH STATE ============
 
 // Logout

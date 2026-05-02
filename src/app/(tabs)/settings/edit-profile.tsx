@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
   Image, ScrollView, TextInput, KeyboardAvoidingView,
@@ -12,8 +12,8 @@ import { useAuth } from '@/context/AuthContext';
 import { uploadAvatar, removeAvatar } from '@/services/avatarService';
 import { loadProfile, saveProfile, formatBirthday, Birthday } from '@/services/profileService';
 import DateWheelPicker from '@/components/DateWheelPicker';
-import { signOutUser } from '@/services/auth';
-import { useRouter } from 'expo-router';
+import { signOutUser, changeDisplayName } from '@/services/auth';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { formatPhoneNumber } from '@/utils/format';
 
 export default function EditProfileScreen() {
@@ -40,15 +40,17 @@ export default function EditProfileScreen() {
   const userAvatar = localAvatar || user?.avatarUrl || user?.photoURL || null;
   const userPhone = formatPhoneNumber(user?.phoneNumber || '');
 
-  // Đọc profile data từ cache
-  useEffect(() => {
-    if (!user?.uid) return;
-    loadProfile(user.uid).then((p) => {
-      if (p.username) setUsername(p.username);
-      if (p.birthday) { setBirthday(p.birthday); setPickerDate(p.birthday); }
-      if (p.bio) setBio(p.bio);
-    });
-  }, [user?.uid]);
+  // Đọc profile data từ cache mỗi khi trang được focus (để cập nhật username từ màn hình edit-username)
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.uid) return;
+      loadProfile(user.uid).then((p) => {
+        if (p.username !== undefined) setUsername(p.username);
+        if (p.birthday) { setBirthday(p.birthday); setPickerDate(p.birthday); }
+        if (p.bio !== undefined) setBio(p.bio);
+      });
+    }, [user?.uid])
+  );
 
   // ── Avatar picker ────────────────────────────────────────────────────────────
 
@@ -138,7 +140,15 @@ export default function EditProfileScreen() {
 
   const handleDone = async () => {
     if (user?.uid) {
+      // 1. Cập nhật profile (username, bio, birthday)
       await saveProfile(user.uid, { username, bio, birthday });
+      
+      // 2. Cập nhật Tên (displayName)
+      const newDisplayName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+      if (newDisplayName !== user.displayName) {
+        await changeDisplayName(user.uid, newDisplayName);
+        await refreshUser(); // Cập nhật lại AuthContext
+      }
     }
     router.replace('/(tabs)/settings');
   };
@@ -284,26 +294,17 @@ export default function EditProfileScreen() {
                 </View>
               </TouchableOpacity>
               <View style={s.sep} />
-              <View style={s.infoRow}>
+              <TouchableOpacity 
+                style={s.infoRow} 
+                activeOpacity={0.6}
+                onPress={() => router.push('/(tabs)/settings/edit-username')}
+              >
                 <Text style={s.infoLabel}>Tên người dùng</Text>
                 <View style={s.infoTrail}>
-                  {username ? <Text style={s.infoValue}>@{username}</Text> : null}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <Text style={s.usernameAt}>@</Text>
-                    <TextInput
-                      style={s.usernameInput}
-                      value={username}
-                      onChangeText={(t) => setUsername(t.replace(/[^a-zA-Z0-9_]/g, ''))}
-                      placeholder="username"
-                      placeholderTextColor="#C7C7CC"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      returnKeyType="done"
-                    />
-                  </View>
+                  {username ? <Text style={s.infoValue}>@{username}</Text> : <Text style={s.infoValue}>Chưa đặt</Text>}
                   <Ionicons name="chevron-forward" size={17} color="rgba(60,60,67,0.3)" />
                 </View>
-              </View>
+              </TouchableOpacity>
               <View style={s.sep} />
               <TouchableOpacity style={s.infoRow} activeOpacity={0.6}>
                 <Text style={s.infoLabel}>Màu của bạn</Text>
