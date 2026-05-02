@@ -67,10 +67,9 @@ export default function ChangePhoneVerifyScreen() {
                 [{
                     text: 'Xong',
                     onPress: () => {
-                        // dismissAll xóa toàn bộ modal stack (change-phone-new + verify)
-                        // rồi navigate về settings để không còn đường back về màn verify
-                        router.dismissAll();
-                        router.replace('/(tabs)/settings');
+                        // Lùi lại đúng 2 màn hình trong stack 
+                        // (Từ Verify -> qua New -> về Profile) để đảm bảo nút Back hoạt động đúng.
+                        router.dismiss(2);
                     }
                 }]
             );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
   Image, ScrollView, TextInput, KeyboardAvoidingView,
@@ -13,7 +13,7 @@ import { uploadAvatar, removeAvatar } from '@/services/avatarService';
 import { loadProfile, saveProfile, formatBirthday, Birthday } from '@/services/profileService';
 import DateWheelPicker from '@/components/DateWheelPicker';
 import { signOutUser, changeDisplayName } from '@/services/auth';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { formatPhoneNumber } from '@/utils/format';
 
 export default function EditProfileScreen() {
@@ -39,6 +39,21 @@ export default function EditProfileScreen() {
   // userAvatar: local preview khi đang upload, sau đó dùng user.avatarUrl (AuthContext)
   const userAvatar = localAvatar || user?.avatarUrl || user?.photoURL || null;
   const userPhone = formatPhoneNumber(user?.phoneNumber || '');
+
+  const { openBirthday, openBio } = useLocalSearchParams<{ openBirthday: string; openBio: string }>();
+  const bioInputRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (openBirthday === 'true') {
+      setTimeout(() => setShowBirthdayPicker(true), 300);
+    }
+  }, [openBirthday]);
+
+  useEffect(() => {
+    if (openBio === 'true') {
+      setTimeout(() => bioInputRef.current?.focus(), 400);
+    }
+  }, [openBio]);
 
   // Đọc profile data từ cache mỗi khi trang được focus (để cập nhật username từ màn hình edit-username)
   useFocusEffect(
@@ -150,10 +165,20 @@ export default function EditProfileScreen() {
         await refreshUser(); // Cập nhật lại AuthContext
       }
     }
-    router.replace('/(tabs)/settings');
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/settings');
+    }
   };
 
-  const handleCancel = () => router.replace('/(tabs)/settings');
+  const handleCancel = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/settings');
+    }
+  };
 
   const handleAddAccount = () => {
     setAddingAccount(true);
@@ -232,8 +257,16 @@ export default function EditProfileScreen() {
 
             {/* ── Bio ─────────────────────────────────────── */}
             <View style={s.card}>
-              <TextInput style={[s.input, { minHeight: 44 }]} value={bio} onChangeText={setBio}
-                placeholder="Giới thiệu" placeholderTextColor="#C7C7CC" multiline returnKeyType="done" />
+              <TextInput
+                ref={bioInputRef}
+                style={[s.input, { minHeight: 44 }]}
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Giới thiệu"
+                placeholderTextColor="#C7C7CC"
+                multiline
+                returnKeyType="done"
+              />
             </View>
             <Text style={s.helperText}>
               Bạn có thể giới thiệu đôi chút về mình. Chọn người xem được câu này ở{' '}

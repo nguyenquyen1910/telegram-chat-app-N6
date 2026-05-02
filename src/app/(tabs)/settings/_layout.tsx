@@ -15,6 +15,8 @@ export default function SettingsLayout() {
       <Stack.Screen name="change-phone-new" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="change-phone-verify" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen name="edit-username" options={{ headerShown: false, presentation: 'transparentModal' }} />
+      <Stack.Screen name="qr-code" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="qr-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
     </Stack>
   );
 }

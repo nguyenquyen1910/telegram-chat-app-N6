@@ -50,7 +50,7 @@ export default function ChangePhoneNewScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c => c.code === '+84') || COUNTRIES[0]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
