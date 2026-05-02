@@ -215,7 +215,7 @@ export default function UserProfileScreen() {
 
       {/* ANIMATED HEADER */}
       <Animated.View style={[st.header, headerStyle]} pointerEvents="box-none">
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }]} pointerEvents="none" />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#F1F0F6' }]} pointerEvents="none" />
 
         {/* Avatar — tap to view fullscreen */}
         <Animated.View style={[st.avatarWrap, avatarStyle]}>
@@ -242,10 +242,15 @@ export default function UserProfileScreen() {
           <Text style={st.stickyStatus}>{statusText}</Text>
         </Animated.View>
 
-        {/* Back button */}
-        <TouchableOpacity style={st.backBtn} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color="#010101" />
-        </TouchableOpacity>
+        <View style={st.topButtonsRow} pointerEvents="box-none">
+          <TouchableOpacity style={st.topIconBtn} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={st.topTextBtn} activeOpacity={0.7}>
+            <Text style={st.editText}>Sửa</Text>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       {/* MEDIA VIEWER */}
@@ -268,10 +273,40 @@ const st = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0,
     zIndex: 10, overflow: 'hidden',
   },
-  backBtn: {
-    position: 'absolute', top: STATUSBAR_HEIGHT + 8, left: 16,
+  topButtonsRow: {
+    position: 'absolute',
+    top: STATUSBAR_HEIGHT + 8,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 20,
+  },
+  topIconBtn: {
     width: 40, height: 40, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center', zIndex: 20,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  topTextBtn: {
+    height: 40, borderRadius: 20,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  editText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '500',
   },
 
   avatarWrap: { position: 'absolute', top: STATUSBAR_HEIGHT + 30, alignSelf: 'center' },
@@ -306,7 +341,12 @@ const st = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   callDateText: {
     fontSize: 16,

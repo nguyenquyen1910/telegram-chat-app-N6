@@ -15,20 +15,6 @@ export default function ChatLayout() {
         name="[chatId]"
         options={{ headerShown: false }}
       />
-      <Stack.Screen
-        name="user-profile"
-        options={{
-          headerShown: false,
-          presentation: 'card',
-        }}
-      />
-      <Stack.Screen
-        name="group-profile"
-        options={{
-          headerShown: false,
-          presentation: 'card',
-        }}
-      />
     </Stack>
   );
 }

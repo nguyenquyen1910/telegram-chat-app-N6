@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { TelegramColors } from '@/constants/colors';
 
 interface ProfileActionsProps {
   onMessage: () => void;
@@ -17,11 +18,11 @@ interface ActionButtonProps {
 
 function ActionButton({ icon, label, onPress }: ActionButtonProps) {
   return (
-    <TouchableOpacity onPress={onPress} style={styles.actionItem}>
-      <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={22} color="#010101" />
-      </View>
-      <Text style={styles.actionLabel}>{label}</Text>
+    <TouchableOpacity onPress={onPress} style={styles.actionItem} activeOpacity={0.7}>
+      <Ionicons name={icon} size={24} color={TelegramColors.primary} style={{ marginBottom: 6 }} />
+      <Text style={styles.actionLabel} numberOfLines={1} adjustsFontSizeToFit>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -34,10 +35,11 @@ export default function ProfileActions({
 }: ProfileActionsProps) {
   return (
     <View style={styles.container}>
-      <ActionButton icon="chatbubble-outline" label="Nhắn tin" onPress={onMessage} />
-      <ActionButton icon="notifications-off-outline" label="Tắt âm" onPress={onMute} />
-      <ActionButton icon="call-outline" label="Gọi" onPress={onCall} />
-      <ActionButton icon="videocam-outline" label="Video" onPress={onVideoCall} />
+      <ActionButton icon="chatbubble" label="message" onPress={onMessage} />
+      <ActionButton icon="call" label="call" onPress={onCall} />
+      <ActionButton icon="videocam" label="video" onPress={onVideoCall} />
+      <ActionButton icon="notifications" label="mute" onPress={onMute} />
+      <ActionButton icon="ellipsis-horizontal" label="more" onPress={() => {}} />
     </View>
   );
 }
@@ -45,27 +47,32 @@ export default function ProfileActions({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    marginTop: 16,
+    justifyContent: 'space-between',
+    gap: 8,
   },
   actionItem: {
     flex: 1,
-    alignItems: 'center',
-  },
-  iconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
+    height: 68,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    paddingHorizontal: 2,
   },
   actionLabel: {
-    color: '#010101',
-    fontSize: 12,
+    color: TelegramColors.primary,
+    fontSize: 11,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
+
+
+

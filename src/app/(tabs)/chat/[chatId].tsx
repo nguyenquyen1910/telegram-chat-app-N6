@@ -38,7 +38,6 @@ import { addMemberToGroup, leaveGroupConversation, updateGroupAvatar, updateGrou
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '@/services/mediaService';
 
-// Separator key cho "Tin nhắn chưa đọc"
 const UNREAD_SEPARATOR_ID = '__unread_separator__';
 
 interface ListItem {
@@ -70,26 +69,22 @@ export default function ChatDetailScreen() {
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [initialLastRead, setInitialLastRead] = useState<Timestamp | null>(null);
   const [hasMarkedRead, setHasMarkedRead] = useState(false);
-  // Search state
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResultIndex, setSearchResultIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrolledToInitial = useRef(false);
 
-  // Group features state
   const [showAddMemberPrompt, setShowAddMemberPrompt] = useState(false);
   const [showRenameGroupPrompt, setShowRenameGroupPrompt] = useState(false);
 
   const { currentWallpaper, setWallpaper } = useChatWallpaper(chatId || null);
 
-  // Track current chat để notification biết bỏ qua
   useEffect(() => {
     setCurrentOpenChat(chatId || null);
     return () => setCurrentOpenChat(null);
   }, [chatId]);
 
-  // Keyboard listener
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
@@ -106,7 +101,6 @@ export default function ChatDetailScreen() {
     };
   }, []);
 
-  // Mute state
   const isMuted = useMemo(() => {
     if (!conversation || !currentUid) return false;
     return conversation.mutedBy?.[currentUid] || false;
@@ -117,7 +111,6 @@ export default function ChatDetailScreen() {
     await toggleMuteConversation(chatId, currentUid, !isMuted);
   }, [chatId, currentUid, isMuted]);
 
-  // Group handlers
   const handleAddMemberSubmit = useCallback(async (phone: string) => {
     if (!chatId) return;
     try {
@@ -205,7 +198,6 @@ export default function ChatDetailScreen() {
     }
   }, [chatId]);
 
-  // Lưu lastReadBy[currentUid] lần đầu khi mở chat (để biết tin nhắn nào chưa đọc)
   useEffect(() => {
     if (lastReadBy && currentUid && initialLastRead === null) {
       const myLastRead = lastReadBy[currentUid] || undefined;
@@ -545,7 +537,7 @@ export default function ChatDetailScreen() {
             onBackPress={() => router.back()}
             onProfilePress={() =>
               router.push({
-                pathname: '/(tabs)/chat/group-profile',
+                pathname: '/group-profile',
                 params: { conversationId: chatId || '' },
               })
             }
@@ -561,7 +553,7 @@ export default function ChatDetailScreen() {
             onBackPress={() => router.back()}
             onProfilePress={() =>
               router.push({
-                pathname: '/(tabs)/chat/user-profile',
+                pathname: '/user-profile',
                 params: { userId: otherUser?.uid || '', conversationId: chatId || '' },
               })
             }

@@ -60,7 +60,7 @@ export default function CallsScreen() {
   const handleInfoPress = useCallback(
     (call: CallRecordWithDirection) => {
       router.push({
-        pathname: "/(tabs)/chat/user-profile",
+        pathname: "/user-profile",
         params: {
           userId: call.otherUserId,
           callDate: call.createdAt?.toDate
@@ -108,6 +108,25 @@ export default function CallsScreen() {
         </View>
         <Text style={styles.newCallText}>Cuộc gọi mới</Text>
       </TouchableOpacity>
+
+      {/* ── DEV ONLY: xem thử UI màn hình gọi ── */}
+      <View style={styles.devRow}>
+        <TouchableOpacity
+          style={styles.devBtn}
+          onPress={() => router.push({ pathname: "/(call-screens)/outgoing", params: { callId: "PREVIEW" } })}
+        >
+          <Ionicons name="call" size={14} color="#fff" />
+          <Text style={styles.devBtnText}>Preview Outgoing</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.devBtn, { backgroundColor: "#7A66C8" }]}
+          onPress={() => router.push({ pathname: "/(call-screens)/incoming", params: { callId: "PREVIEW" } })}
+        >
+          <Ionicons name="call-outline" size={14} color="#fff" />
+          <Text style={styles.devBtnText}>Preview Incoming</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.sectionTitle}>CUỘC GỌI GẦN ĐÂY</Text>
     </View>
   );
@@ -325,4 +344,23 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyText: { fontSize: 16, color: "#666666", marginTop: 12 },
+
+  // DEV ONLY
+  devRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: "#FAFAFA",
+  },
+  devBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#2D8B6A",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  devBtnText: { color: "#fff", fontSize: 13, fontWeight: "500" },
 });
