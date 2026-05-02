@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
   Image, ScrollView, TextInput, KeyboardAvoidingView,
@@ -12,15 +12,15 @@ import { useAuth } from '@/context/AuthContext';
 import { uploadAvatar, removeAvatar } from '@/services/avatarService';
 import { loadProfile, saveProfile, formatBirthday, Birthday } from '@/services/profileService';
 import DateWheelPicker from '@/components/DateWheelPicker';
-import { signOutUser } from '@/services/auth';
-import { useRouter } from 'expo-router';
+import { signOutUser, changeDisplayName } from '@/services/auth';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { formatPhoneNumber } from '@/utils/format';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, refreshUser, updateAvatarUrl } = useAuth();
+  const { user, refreshUser, updateAvatarUrl, setAddingAccount, logout } = useAuth();
 
   const nameParts = (user?.displayName || '').split(' ');
   const [firstName, setFirstName] = useState(nameParts[0] || '');
@@ -40,15 +40,32 @@ export default function EditProfileScreen() {
   const userAvatar = localAvatar || user?.avatarUrl || user?.photoURL || null;
   const userPhone = formatPhoneNumber(user?.phoneNumber || '');
 
-  // Đọc profile data từ cache
+  const { openBirthday, openBio } = useLocalSearchParams<{ openBirthday: string; openBio: string }>();
+  const bioInputRef = useRef<any>(null);
+
   useEffect(() => {
-    if (!user?.uid) return;
-    loadProfile(user.uid).then((p) => {
-      if (p.username) setUsername(p.username);
-      if (p.birthday) { setBirthday(p.birthday); setPickerDate(p.birthday); }
-      if (p.bio) setBio(p.bio);
-    });
-  }, [user?.uid]);
+    if (openBirthday === 'true') {
+      setTimeout(() => setShowBirthdayPicker(true), 300);
+    }
+  }, [openBirthday]);
+
+  useEffect(() => {
+    if (openBio === 'true') {
+      setTimeout(() => bioInputRef.current?.focus(), 400);
+    }
+  }, [openBio]);
+
+  // Đọc profile data từ cache mỗi khi trang được focus (để cập nhật username từ màn hình edit-username)
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.uid) return;
+      loadProfile(user.uid).then((p) => {
+        if (p.username !== undefined) setUsername(p.username);
+        if (p.birthday) { setBirthday(p.birthday); setPickerDate(p.birthday); }
+        if (p.bio !== undefined) setBio(p.bio);
+      });
+    }, [user?.uid])
+  );
 
   // ── Avatar picker ────────────────────────────────────────────────────────────
 
@@ -138,19 +155,49 @@ export default function EditProfileScreen() {
 
   const handleDone = async () => {
     if (user?.uid) {
+      // 1. Cập nhật profile (username, bio, birthday)
       await saveProfile(user.uid, { username, bio, birthday });
+      
+      // 2. Cập nhật Tên (displayName)
+      const newDisplayName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+      if (newDisplayName !== user.displayName) {
+        await changeDisplayName(user.uid, newDisplayName);
+        await refreshUser(); // Cập nhật lại AuthContext
+      }
     }
-    router.replace('/(tabs)/settings');
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/settings');
+    }
   };
 
-  const handleCancel = () => router.replace('/(tabs)/settings');
+  const handleCancel = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/settings');
+    }
+  };
+
+  const handleAddAccount = () => {
+    setAddingAccount(true);
+    router.push('/(auth)/phone');
+  };
 
   const confirmLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await signOutUser();
-      router.replace('/(auth)/welcome');
+      const hasOther = await logout(); // Use logout from AuthContext
+      if (!hasOther) {
+        router.replace('/(auth)/welcome');
+      } else {
+        setShowLogout(false);
+        router.replace('/(tabs)/settings');
+      }
     } catch {
+      // Ignored
+    } finally {
       setIsLoggingOut(false);
     }
   };
@@ -210,8 +257,16 @@ export default function EditProfileScreen() {
 
             {/* ── Bio ─────────────────────────────────────── */}
             <View style={s.card}>
-              <TextInput style={[s.input, { minHeight: 44 }]} value={bio} onChangeText={setBio}
-                placeholder="Giới thiệu" placeholderTextColor="#C7C7CC" multiline returnKeyType="done" />
+              <TextInput
+                ref={bioInputRef}
+                style={[s.input, { minHeight: 44 }]}
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Giới thiệu"
+                placeholderTextColor="#C7C7CC"
+                multiline
+                returnKeyType="done"
+              />
             </View>
             <Text style={s.helperText}>
               Bạn có thể giới thiệu đôi chút về mình. Chọn người xem được câu này ở{' '}
@@ -284,26 +339,17 @@ export default function EditProfileScreen() {
                 </View>
               </TouchableOpacity>
               <View style={s.sep} />
-              <View style={s.infoRow}>
+              <TouchableOpacity 
+                style={s.infoRow} 
+                activeOpacity={0.6}
+                onPress={() => router.push('/(tabs)/settings/edit-username')}
+              >
                 <Text style={s.infoLabel}>Tên người dùng</Text>
                 <View style={s.infoTrail}>
-                  {username ? <Text style={s.infoValue}>@{username}</Text> : null}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <Text style={s.usernameAt}>@</Text>
-                    <TextInput
-                      style={s.usernameInput}
-                      value={username}
-                      onChangeText={(t) => setUsername(t.replace(/[^a-zA-Z0-9_]/g, ''))}
-                      placeholder="username"
-                      placeholderTextColor="#C7C7CC"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      returnKeyType="done"
-                    />
-                  </View>
+                  {username ? <Text style={s.infoValue}>@{username}</Text> : <Text style={s.infoValue}>Chưa đặt</Text>}
                   <Ionicons name="chevron-forward" size={17} color="rgba(60,60,67,0.3)" />
                 </View>
-              </View>
+              </TouchableOpacity>
               <View style={s.sep} />
               <TouchableOpacity style={s.infoRow} activeOpacity={0.6}>
                 <Text style={s.infoLabel}>Màu của bạn</Text>
@@ -313,7 +359,7 @@ export default function EditProfileScreen() {
 
             {/* ── Add account ─────────────────────────────── */}
             <View style={[s.card, { marginTop: 20 }]}>
-              <TouchableOpacity style={s.centeredRow} activeOpacity={0.6}>
+              <TouchableOpacity style={s.centeredRow} activeOpacity={0.6} onPress={handleAddAccount}>
                 <Text style={s.blueText}>Thêm tài khoản khác</Text>
               </TouchableOpacity>
             </View>
@@ -360,14 +406,23 @@ export default function EditProfileScreen() {
       <Modal visible={showLogout} transparent animationType="fade" onRequestClose={() => setShowLogout(false)}>
         <View style={s.logoutOverlay}>
           <View style={s.logoutCard}>
-            <Text style={s.logoutTitle}>Đăng xuất</Text>
-            <Text style={s.logoutSub}>Bạn có chắc muốn đăng xuất không?</Text>
-            <TouchableOpacity style={s.logoutBtn} onPress={confirmLogout} disabled={isLoggingOut}>
-              <Text style={s.logoutBtnText}>{isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.logoutCancelBtn} onPress={() => setShowLogout(false)}>
-              <Text style={s.logoutCancelText}>Hủy</Text>
-            </TouchableOpacity>
+            <Text style={s.logoutTitle}>Đăng xuất?</Text>
+            <Text style={s.logoutSub}>
+              Điều này sẽ hủy mọi chat bí mật.{'\n\n'}
+              Bạn có thể dùng Telegram trên mọi thiết bị cùng lúc và nhiều tài khoản trong cùng một ứng dụng.
+            </Text>
+            <View style={s.logoutBtnRow}>
+              <TouchableOpacity style={s.logoutCancelBtn} onPress={() => setShowLogout(false)}>
+                <Text style={s.logoutCancelText}>Hủy bỏ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.logoutConfirmBtn} onPress={confirmLogout} disabled={isLoggingOut}>
+                {isLoggingOut ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={s.logoutConfirmText}>OK</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -436,11 +491,12 @@ const s = StyleSheet.create({
 
   // Logout modal
   logoutOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
-  logoutCard: { backgroundColor: WHITE, borderRadius: 20, padding: 28, width: '78%', alignItems: 'center' },
-  logoutTitle: { fontSize: 20, fontWeight: '700', color: '#000', marginBottom: 8 },
-  logoutSub: { fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  logoutBtn: { backgroundColor: '#FF3B30', borderRadius: 14, paddingVertical: 14, width: '100%', alignItems: 'center', marginBottom: 10 },
-  logoutBtnText: { fontSize: 17, fontWeight: '600', color: WHITE },
-  logoutCancelBtn: { backgroundColor: '#F2F2F7', borderRadius: 14, paddingVertical: 14, width: '100%', alignItems: 'center' },
-  logoutCancelText: { fontSize: 17, fontWeight: '600', color: BLUE },
+  logoutCard: { backgroundColor: WHITE, borderRadius: 20, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20, width: 310 },
+  logoutTitle: { fontSize: 20, fontWeight: '700', color: '#000', marginBottom: 12 },
+  logoutSub: { fontSize: 16, color: '#000', lineHeight: 22, marginBottom: 24 },
+  logoutBtnRow: { flexDirection: 'row', gap: 12 },
+  logoutCancelBtn: { flex: 1, backgroundColor: '#E5E5EA', borderRadius: 20, paddingVertical: 14, alignItems: 'center' },
+  logoutCancelText: { fontSize: 17, fontWeight: '500', color: '#000' },
+  logoutConfirmBtn: { flex: 1, backgroundColor: '#3b82f6', borderRadius: 20, paddingVertical: 14, alignItems: 'center' },
+  logoutConfirmText: { fontSize: 17, fontWeight: '600', color: WHITE },
 });

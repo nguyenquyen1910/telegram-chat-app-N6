@@ -248,7 +248,7 @@ export default function SettingsScreen() {
 
         {/* ── Group 1 ─────────────────────────────────────── */}
         <View style={[s.section, { marginTop: 20 }]}>
-          <SettingRow iconBg="#E8405A" iconName="person" label="Trang cá nhân" onPress={() => {}} />
+          <SettingRow iconBg="#E8405A" iconName="person" label="Trang cá nhân" onPress={() => router.push('/(tabs)/settings/profile')} />
           <SettingRow iconBg="#2AABEE" iconName="wallet" label="Wallet" badge="MỚI" badgeStyle="new" isLast onPress={() => {}} />
         </View>
 
@@ -278,7 +278,7 @@ export default function SettingsScreen() {
 
         <View style={s.navBar} pointerEvents="box-none">
           {/* QR button – hình tròn khi expanded */}
-          <TouchableOpacity style={s.navSide}>
+          <TouchableOpacity style={s.navSide} onPress={() => router.push('/(tabs)/settings/qr-code')}>
             {expanded
               ? <View style={s.navCircleBtn}><Ionicons name="qr-code-outline" size={18} color="#FFF" /></View>
               : <Ionicons name="qr-code-outline" size={22} color={BLUE} />

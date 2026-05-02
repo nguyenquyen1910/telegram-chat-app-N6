@@ -23,7 +23,7 @@ export default function SetupProfileScreen() {
         email: string;
     }>();
     const router = useRouter();
-    const { setIsVerifying } = useAuth();
+    const { setIsVerifying, isAddingAccount, setAddingAccount } = useAuth();
 
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -68,7 +68,12 @@ export default function SetupProfileScreen() {
 
             await registerUser(phoneNumber, email, displayName);
             setIsVerifying(false);
-            router.replace('/(tabs)/chat');
+            if (isAddingAccount) {
+                setAddingAccount(false);
+                router.replace('/(tabs)/settings');
+            } else {
+                router.replace('/(tabs)/chat');
+            }
         } catch (error: any) {
             Alert.alert('Lỗi', error.message || 'Không thể tạo tài khoản.');
         } finally {

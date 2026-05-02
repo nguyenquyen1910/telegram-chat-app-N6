@@ -1,36 +1,46 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { AuthUser, onAuthStateChange, signOutUser, updateLastActive, refreshAuthUser } from '@/services/auth';
+import { AuthUser, onAuthStateChange, signOutUser, updateLastActive, refreshAuthUser, getSavedAccounts, switchActiveAccount } from '@/services/auth';
 import { updateUserStatus } from '@/services/userService';
 
 interface AuthContextType {
   user: AuthUser | null;
+  accounts: AuthUser[];
   isLoading: boolean;
   isAuthenticated: boolean;
   isVerifying: boolean;
   setIsVerifying: (v: boolean) => void;
-  logout: () => Promise<void>;
+  isAddingAccount: boolean;
+  setAddingAccount: (v: boolean) => void;
+  logout: () => Promise<boolean>;
   refreshUser: () => Promise<void>;
   updateAvatarUrl: (url: string | null) => void;
   updatePhoneNumber: (phone: string) => void;
+  switchAccount: (uid: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  accounts: [],
   isLoading: true,
   isAuthenticated: false,
   isVerifying: false,
   setIsVerifying: () => {},
-  logout: async () => {},
+  isAddingAccount: false,
+  setAddingAccount: () => {},
+  logout: async () => false,
   refreshUser: async () => {},
   updateAvatarUrl: () => {},
   updatePhoneNumber: () => {},
+  switchAccount: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [accounts, setAccounts] = useState<AuthUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isAddingAccount, setAddingAccount] = useState(false);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
@@ -80,20 +90,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [user]);
 
-  const logout = async () => {
+  // Reload accounts list whenever current user changes
+  useEffect(() => {
+    getSavedAccounts().then(setAccounts).catch(console.warn);
+  }, [user]);
+
+  const logout = async (): Promise<boolean> => {
     // Set OFFLINE before signing out
     if (user) {
       await updateUserStatus(user.uid, false).catch(console.warn);
     }
-    await signOutUser();
-    setUser(null);
+    const hasOtherAccount = await signOutUser();
+    if (!hasOtherAccount) {
+      setUser(null);
+    }
+    return hasOtherAccount;
   };
 
   const refreshUser = async () => {
     await refreshAuthUser();
   };
 
-  // Cập nhật avatarUrl trong AuthContext ngay lập tức (không cần đọc lại AsyncStorage)
   const updateAvatarUrl = (url: string | null) => {
     setUser(prev => {
       if (!prev) return prev;
@@ -101,7 +118,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Cập nhật số điện thoại trong AuthContext ngay lập tức
   const updatePhoneNumber = (phone: string) => {
     setUser(prev => {
       if (!prev) return prev;
@@ -109,18 +125,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const switchAccount = async (uid: string) => {
+    if (user?.uid === uid) return;
+    await switchActiveAccount(uid);
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        accounts,
         isLoading,
         isAuthenticated: !!user,
         isVerifying,
         setIsVerifying,
+        isAddingAccount,
+        setAddingAccount,
         logout,
         refreshUser,
         updateAvatarUrl,
         updatePhoneNumber,
+        switchAccount,
       }}
     >
       {children}

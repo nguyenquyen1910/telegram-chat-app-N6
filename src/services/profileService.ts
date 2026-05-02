@@ -87,6 +87,32 @@ export async function saveProfile(uid: string, changes: Partial<UserProfile>): P
   }
 }
 
+/**
+ * Kiểm tra xem username đã tồn tại trong Firestore chưa (không tính uid hiện tại).
+ */
+export async function checkUsernameExists(username: string, currentUid?: string): Promise<boolean> {
+  if (!db) return false;
+  if (!username) return false;
+  try {
+    const { collection, query, where, getDocs } = await import('firebase/firestore');
+    const q = query(collection(db, 'users'), where('username', '==', username));
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) return false;
+    
+    // Nếu tìm thấy, kiểm tra xem có phải của chính user hiện tại không
+    if (currentUid) {
+      const isMine = snapshot.docs.every(doc => doc.id === currentUid);
+      return !isMine;
+    }
+    
+    return true; // Đã có người dùng (và không có currentUid để loại trừ)
+  } catch (e) {
+    console.error('[profileService] checkUsernameExists error:', e);
+    return false;
+  }
+}
+
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
 /** Hiển thị sinh nhật dạng "9 Th.7 2004" */

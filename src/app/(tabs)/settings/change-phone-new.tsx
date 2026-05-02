@@ -11,42 +11,38 @@ import {
   Modal,
   ScrollView,
   Keyboard,
+  SectionList,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import WebView from 'react-native-webview';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { checkPhoneExists } from '@/services/auth';
 import { useAuth } from '@/context/AuthContext';
 
-// URL sticker điện thoại đỏ – Telegram animated emoji chính thức (WebP trong suốt)
-const PHONE_STICKER_URL =
-  'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Telegram-Animated-Emojis/main/Objects/Telephone.webp';
-
-// HTML nhúng vào WebView để hiển thị animated sticker, mix-blend-mode xóa nền trắng
-const PHONE_HTML = `<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;}
-  html,body{width:100%;height:100%;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden;}
-  img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply;}
-</style>
-</head>
-<body>
-  <img src="${PHONE_STICKER_URL}" alt="phone"/>
-</body>
-</html>`;
+// Đã chuyển sang expo-image để tải nhanh
 
 
 // ─── Country list ─────────────────────────────────────────────────────────────
 const COUNTRIES = [
-  { name: 'Việt Nam', code: '+84', flag: '🇻🇳' },
-  { name: 'Hoa Kỳ', code: '+1', flag: '🇺🇸' },
-  { name: 'Nhật Bản', code: '+81', flag: '🇯🇵' },
-  { name: 'Hàn Quốc', code: '+82', flag: '🇰🇷' },
-  { name: 'Trung Quốc', code: '+86', flag: '🇨🇳' },
-  { name: 'Thái Lan', code: '+66', flag: '🇹🇭' },
+  { name: 'Afghanistan', en: 'Afghanistan', code: '+93', flag: '🇦🇫' },
+  { name: 'Ai Cập', en: 'Egypt', code: '+20', flag: '🇪🇬' },
+  { name: 'Albania', en: 'Albania', code: '+355', flag: '🇦🇱' },
+  { name: 'Algeria', en: 'Algeria', code: '+213', flag: '🇩🇿' },
+  { name: 'Andorra', en: 'Andorra', code: '+376', flag: '🇦🇩' },
+  { name: 'Angola', en: 'Angola', code: '+244', flag: '🇦🇴' },
+  { name: 'Anguilla', en: 'Anguilla', code: '+1264', flag: '🇦🇮' },
+  { name: 'Antigua và Barbuda', en: 'Antigua & Barbuda', code: '+1268', flag: '🇦🇬' },
+  { name: 'Argentina', en: 'Argentina', code: '+54', flag: '🇦🇷' },
+  { name: 'Armenia', en: 'Armenia', code: '+374', flag: '🇦🇲' },
+  { name: 'Hoa Kỳ', en: 'United States', code: '+1', flag: '🇺🇸' },
+  { name: 'Hàn Quốc', en: 'South Korea', code: '+82', flag: '🇰🇷' },
+  { name: 'Nhật Bản', en: 'Japan', code: '+81', flag: '🇯🇵' },
+  { name: 'Thái Lan', en: 'Thailand', code: '+66', flag: '🇹🇭' },
+  { name: 'Trung Quốc', en: 'China', code: '+86', flag: '🇨🇳' },
+  { name: 'Việt Nam', en: 'Vietnam', code: '+84', flag: '🇻🇳' },
 ];
 
 export default function ChangePhoneNewScreen() {
@@ -54,21 +50,73 @@ export default function ChangePhoneNewScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c => c.code === '+84') || COUNTRIES[0]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
 
   const fullPhone = `${selectedCountry.code}${phoneNumber}`;
   const isValid = phoneNumber.length >= 9;
 
-  const handleContinue = async () => {
+  // Search và phân nhóm quốc gia
+  const sectionListRef = React.useRef<SectionList>(null);
+  const [searchQuery, setSearchQuery] = React.useState('');
+
+  const filteredSections = React.useMemo(() => {
+    let filtered = COUNTRIES;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = COUNTRIES.filter(c => 
+        c.name.toLowerCase().includes(q) || 
+        c.en.toLowerCase().includes(q) || 
+        c.code.includes(q)
+      );
+    }
+    const grouped = filtered.reduce((acc, curr) => {
+      const letter = curr.name[0].toUpperCase();
+      if (!acc[letter]) acc[letter] = [];
+      acc[letter].push(curr);
+      return acc;
+    }, {} as Record<string, typeof COUNTRIES>);
+
+    return Object.keys(grouped)
+      .sort()
+      .map(letter => ({ title: letter, data: grouped[letter] }));
+  }, [searchQuery]);
+
+  const alphabet = React.useMemo(() => {
+    return Object.keys(
+      COUNTRIES.reduce((acc, curr) => {
+        acc[curr.name[0].toUpperCase()] = true;
+        return acc;
+      }, {} as Record<string, boolean>)
+    ).sort();
+  }, []);
+
+  const scrollToLetter = (letter: string) => {
+    const index = filteredSections.findIndex(s => s.title === letter);
+    if (index !== -1 && sectionListRef.current) {
+      sectionListRef.current.scrollToLocation({ sectionIndex: index, itemIndex: 0, animated: true });
+    }
+  };
+
+  React.useEffect(() => {
+    if (!showCountryPicker) setSearchQuery('');
+  }, [showCountryPicker]);
+
+  const handleContinue = () => {
     Keyboard.dismiss();
     if (!isValid) return;
     if (fullPhone === user?.phoneNumber) {
       Alert.alert('Số trùng', 'Số mới không được giống số hiện tại.');
       return;
     }
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmPhoneNumber = async () => {
+    setShowConfirmModal(false);
     setIsChecking(true);
     try {
       const exists = await checkPhoneExists(fullPhone);
@@ -106,16 +154,12 @@ export default function ChangePhoneNewScreen() {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        {/* Sticker điện thoại đỏ động – WebView mix-blend-mode xóa nền trắng */}
+        {/* Sticker điện thoại đỏ động */}
         <View style={s.illustrationWrap}>
-          <WebView
-            source={{ html: PHONE_HTML }}
+          <Image
+            source={require('@/assets/stickers/telephone_red.webp')}
             style={StyleSheet.absoluteFill}
-            scrollEnabled={false}
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-            originWhitelist={['*']}
-            allowsInlineMediaPlayback
+            contentFit="contain"
           />
         </View>
 
@@ -173,35 +217,108 @@ export default function ChangePhoneNewScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* ── Country picker modal ── */}
-      <Modal visible={showCountryPicker} transparent animationType="slide">
-        <View style={s.modalBg}>
-          <View style={s.pickerSheet}>
-            <View style={s.pickerHandle} />
-            <Text style={s.pickerTitle}>Chọn quốc gia</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {COUNTRIES.map(c => (
-                <TouchableOpacity
-                  key={c.code}
-                  style={s.pickerItem}
-                  onPress={() => {
-                    setSelectedCountry(c);
-                    setShowCountryPicker(false);
-                  }}
-                >
-                  <Text style={s.pickerFlag}>{c.flag}</Text>
-                  <Text style={s.pickerName}>{c.name}</Text>
-                  <Text style={s.pickerCode}>{c.code}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              style={s.pickerCancel}
-              onPress={() => setShowCountryPicker(false)}
-            >
-              <Text style={s.pickerCancelText}>Hủy</Text>
+      {/* ── Confirm Modal ── */}
+      <Modal visible={showConfirmModal} transparent animationType="fade">
+        <View style={s.confirmModalBg}>
+          <View style={s.confirmBox}>
+            <Text style={s.confirmPhone}>{selectedCountry.code} {phoneNumber}</Text>
+            <Text style={s.confirmSubtitle}>Đây đúng là số của bạn chứ?</Text>
+            <TouchableOpacity onPress={() => setShowConfirmModal(false)} style={s.editBtn} activeOpacity={0.7}>
+              <Text style={s.editBtnText}>Sửa</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.confirmBtn} onPress={handleConfirmPhoneNumber} activeOpacity={0.8}>
+              <Text style={s.confirmBtnText}>Tiếp tục</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* ── Country picker modal (Premium Full Screen) ── */}
+      <Modal visible={showCountryPicker} transparent={false} animationType="slide">
+        <View style={s.pickerScreen}>
+          {/* Header */}
+          <View style={s.pickerHeader}>
+            <TouchableOpacity style={s.pickerCloseBtn} onPress={() => setShowCountryPicker(false)}>
+              <Text style={s.pickerCloseIcon}>✕</Text>
+            </TouchableOpacity>
+            <Text style={s.pickerTitle}>Quốc gia</Text>
+            <View style={{ width: 32 }} />
+          </View>
+
+          <KeyboardAvoidingView 
+            style={{ flex: 1 }} 
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <View style={s.pickerListWrap}>
+              <SectionList
+                ref={sectionListRef}
+                sections={filteredSections}
+                keyExtractor={(item) => item.code + item.name}
+                keyboardDismissMode="on-drag"
+                showsVerticalScrollIndicator={false}
+                stickySectionHeadersEnabled={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                renderSectionHeader={({ section: { title } }) => (
+                  <View style={s.sectionHeader}>
+                    <Text style={s.sectionHeaderText}>{title}</Text>
+                  </View>
+                )}
+                renderItem={({ item, index, section }) => {
+                  const isFirst = index === 0;
+                  const isLast = index === section.data.length - 1;
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        s.pickerItem,
+                        isFirst && { borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+                        isLast && { borderBottomLeftRadius: 12, borderBottomRightRadius: 12, borderBottomWidth: 0 }
+                      ]}
+                      onPress={() => {
+                        setSelectedCountry(item);
+                        setShowCountryPicker(false);
+                      }}
+                    >
+                      <Text style={s.pickerFlag}>{item.flag}</Text>
+                      <View style={s.pickerItemInfo}>
+                        <Text style={s.pickerName}>{item.name}</Text>
+                        <Text style={s.pickerEn}>{item.en}</Text>
+                      </View>
+                      <Text style={s.pickerCode}>{item.code}</Text>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+
+              {searchQuery === '' ? (
+                <View style={s.alphabetWrap}>
+                  {alphabet.map((letter) => (
+                    <TouchableOpacity key={letter} onPress={() => scrollToLetter(letter)} hitSlop={{top: 2, bottom: 2, left: 10, right: 10}}>
+                      <Text style={s.alphabetText}>{letter}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            <View style={s.floatingSearchWrap}>
+              <View style={s.searchBox}>
+                <Ionicons name="search" size={20} color="#8E8E93" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Tìm kiếm"
+                  placeholderTextColor="#8E8E93"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoFocus={true}
+                />
+                {searchQuery !== '' ? (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+                    <Ionicons name="close-circle" size={20} color="#8E8E93" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
@@ -247,14 +364,35 @@ const s = StyleSheet.create({
   continueText: { fontSize: 17, fontWeight: '600', color: '#AEAEB2' },
   continueTextActive: { color: '#2481CC' },
 
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
-  pickerSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingBottom: 36, maxHeight: '70%' },
-  pickerHandle: { width: 40, height: 4, backgroundColor: '#D1D1D6', borderRadius: 2, alignSelf: 'center', marginVertical: 12 },
-  pickerTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center', color: '#000', marginBottom: 12 },
-  pickerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E5EA' },
-  pickerFlag: { fontSize: 22, marginRight: 12 },
-  pickerName: { fontSize: 17, flex: 1, color: '#000' },
-  pickerCode: { fontSize: 15, color: '#8E8E93' },
-  pickerCancel: { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
-  pickerCancelText: { fontSize: 17, color: '#FF3B30', fontWeight: '600' },
+  pickerScreen: { flex: 1, backgroundColor: '#F2F2F7', paddingTop: Platform.OS === 'ios' ? 44 : 16 },
+  pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  pickerCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#E5E5EA', justifyContent: 'center', alignItems: 'center' },
+  pickerCloseIcon: { fontSize: 16, color: '#000', fontWeight: '500' },
+  pickerTitle: { fontSize: 18, fontWeight: '600', color: '#000' },
+
+  pickerListWrap: { flex: 1, paddingLeft: 16, paddingRight: 24 },
+  sectionHeader: { paddingVertical: 8, paddingHorizontal: 4, marginTop: 4 },
+  sectionHeaderText: { fontSize: 13, color: '#8E8E93', fontWeight: '600' },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E5EA' },
+  pickerFlag: { fontSize: 24, marginRight: 12 },
+  pickerItemInfo: { flex: 1 },
+  pickerName: { fontSize: 16, color: '#000', fontWeight: '400', marginBottom: 2 },
+  pickerEn: { fontSize: 13, color: '#8E8E93' },
+  pickerCode: { fontSize: 16, color: '#8E8E93' },
+
+  alphabetWrap: { position: 'absolute', right: 2, top: 40, bottom: 100, justifyContent: 'center', alignItems: 'center', width: 20 },
+  alphabetText: { fontSize: 11, color: '#3882F8', fontWeight: '600', marginVertical: 1.5 },
+
+  floatingSearchWrap: { position: 'absolute', bottom: 24, left: 16, right: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 5 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 24, height: 48, paddingHorizontal: 16 },
+  searchInput: { flex: 1, fontSize: 17, color: '#000' },
+
+  confirmModalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  confirmBox: { backgroundColor: '#FFFFFF', borderRadius: 28, paddingTop: 36, paddingBottom: 24, paddingHorizontal: 24, width: '100%', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 5 },
+  confirmPhone: { fontSize: 30, fontWeight: '700', color: '#000', marginBottom: 12, textAlign: 'center' },
+  confirmSubtitle: { fontSize: 16, color: '#000', marginBottom: 24, textAlign: 'center' },
+  editBtn: { paddingVertical: 8, marginBottom: 16 },
+  editBtnText: { fontSize: 17, color: '#3882F8', fontWeight: '400' },
+  confirmBtn: { backgroundColor: '#3882F8', borderRadius: 27, height: 54, width: '100%', justifyContent: 'center', alignItems: 'center' },
+  confirmBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
 });

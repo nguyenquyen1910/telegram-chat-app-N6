@@ -12,34 +12,21 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { formatPhoneNumber } from '@/utils/format';
 
-// HTML nhúng GIF với mix-blend-mode: multiply để xóa pixel trắng
-const DUCK_HTML = `
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    width: 100%; height: 100%;
-    background: #F2F2F7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+const INJECTED_JS = `
+  document.body.style.backgroundColor = '#F2F2F7';
+  document.body.style.margin = '0';
+  document.body.style.padding = '0';
+  document.body.style.display = 'flex';
+  document.body.style.alignItems = 'center';
+  document.body.style.justifyContent = 'center';
+  var img = document.querySelector('img');
+  if (img) {
+    img.style.mixBlendMode = 'multiply';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'contain';
   }
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    mix-blend-mode: multiply;
-  }
-</style>
-</head>
-<body>
-  <img src="https://c.tenor.com/X0pKdh_B72UAAAAC/telegram-duck.gif" />
-</body>
-</html>
+  true;
 `;
 
 const BLUE = '#037EE5';
@@ -73,7 +60,8 @@ export default function ChangePhoneScreen() {
         {/* GIF động vịt – bọc trong View cứng kích thước để WebView không phình */}
         <View style={s.illustrationWrap}>
           <WebView
-            source={{ html: DUCK_HTML }}
+            source={require('@/assets/stickers/telegram_duck.gif')}
+            injectedJavaScript={INJECTED_JS}
             style={StyleSheet.absoluteFill}
             scrollEnabled={false}
             showsHorizontalScrollIndicator={false}
