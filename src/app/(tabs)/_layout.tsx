@@ -1,15 +1,20 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, View, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
 import CustomTabBar from '../../components/CustomTabBar';
 import { useSharedChatList } from '@/context/ChatListContext';
+import { useAuth } from '@/context/AuthContext';
+import AccountSwitcherModal from '@/components/AccountSwitcherModal';
 
 export default function TabsLayout() {
-  const userAvatar = null;
+  const { user } = useAuth();
+  const userAvatar = user?.avatarUrl || user?.photoURL || null;
   const { totalUnreadCount } = useSharedChatList();
-
+  const [showSwitcher, setShowSwitcher] = useState(false);
 
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -63,6 +68,9 @@ export default function TabsLayout() {
 
       <Tabs.Screen
         name="settings"
+        listeners={{
+          tabLongPress: () => setShowSwitcher(true),
+        }}
         options={{
           title: 'Cài đặt',
           tabBarIcon: ({ color, size, focused }) => (
@@ -83,6 +91,12 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    
+    <AccountSwitcherModal 
+      visible={showSwitcher} 
+      onClose={() => setShowSwitcher(false)} 
+    />
+    </>
   );
 }
 

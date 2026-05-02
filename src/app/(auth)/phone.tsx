@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { checkPhoneExists, getEmailByPhone, sendEmailOTP } from '@/services/auth';
 import { useAuth } from '@/context/AuthContext';
 
@@ -28,7 +29,7 @@ const COUNTRIES = [
 
 export default function PhoneScreen() {
   const router = useRouter();
-  const { setIsVerifying } = useAuth();
+  const { setIsVerifying, isAddingAccount, setAddingAccount } = useAuth();
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
@@ -93,12 +94,23 @@ export default function PhoneScreen() {
     }
   };
 
+  const handleCancelAddAccount = () => {
+    setAddingAccount(false);
+    router.replace('/(tabs)/settings');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.inner}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {isAddingAccount && (
+          <TouchableOpacity style={styles.closeButton} onPress={handleCancelAddAccount}>
+            <Ionicons name="close" size={20} color="#8E8E93" />
+          </TouchableOpacity>
+        )}
+
         {/* Header icon */}
         <View style={styles.iconContainer}>
           <Text style={styles.phoneIcon}>📞</Text>
@@ -226,10 +238,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  closeButton: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    marginBottom: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: -4, // slight offset to look aligned
+  },
   inner: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 40,
+    paddingTop: 16,
   },
   iconContainer: {
     alignItems: 'center',

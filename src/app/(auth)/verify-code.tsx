@@ -35,7 +35,7 @@ export default function VerifyCodeScreen() {
         mode: 'login' | 'register';
     }>();
     const router = useRouter();
-    const { setIsVerifying } = useAuth();
+    const { setIsVerifying, isAddingAccount, setAddingAccount } = useAuth();
     const [code, setCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [countdown, setCountdown] = useState(60);
@@ -72,7 +72,12 @@ export default function VerifyCodeScreen() {
                 // Clear verifying flag before navigating away
                 setIsVerifying(false);
                 await loginUser(phoneNumber);
-                router.replace('/(tabs)/chat');
+                if (isAddingAccount) {
+                    setAddingAccount(false);
+                    router.replace('/(tabs)/settings');
+                } else {
+                    router.replace('/(tabs)/chat');
+                }
             } else {
                 router.push({
                     pathname: '/(auth)/verify-sms',

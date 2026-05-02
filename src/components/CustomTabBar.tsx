@@ -7,6 +7,7 @@ import {
   Dimensions,
   Platform,
   Keyboard,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -19,6 +20,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useAuth } from '@/context/AuthContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HORIZONTAL_MARGIN = 20;
@@ -45,6 +47,7 @@ function TabItem({
   onPress,
   onLongPress,
   badge,
+  userAvatar,
 }: {
   label: string;
   routeName: string;
@@ -52,6 +55,7 @@ function TabItem({
   onPress: () => void;
   onLongPress: () => void;
   badge?: number | string;
+  userAvatar?: string | null;
 }) {
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -91,11 +95,24 @@ function TabItem({
       style={styles.tabItem}
     >
       <Animated.View style={[styles.tabContent, animatedStyle]}>
-        <Ionicons
-          name={isFocused ? icons.focused : icons.unfocused}
-          size={24}
-          color={isFocused ? '#2196F3' : '#555555'}
-        />
+        {routeName === 'settings' && userAvatar ? (
+          <Image
+            source={{ uri: userAvatar }}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              borderWidth: isFocused ? 2 : 0,
+              borderColor: '#2196F3',
+            }}
+          />
+        ) : (
+          <Ionicons
+            name={isFocused ? icons.focused : icons.unfocused}
+            size={24}
+            color={isFocused ? '#2196F3' : '#555555'}
+          />
+        )}
         {badge !== undefined && (
           <View style={styles.badgeContainer}>
             <Text style={styles.badgeText}>{typeof badge === 'number' && badge > 99 ? '99+' : badge}</Text>
@@ -122,6 +139,8 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const indicatorX = useSharedValue(state.index * tabWidth);
   const indicatorY = useSharedValue(-2);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const { user } = useAuth();
+  const userAvatar = user?.avatarUrl || user?.photoURL || null;
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -185,6 +204,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
               routeName={route.name}
               isFocused={isFocused}
               badge={options.tabBarBadge as number | string}
+              userAvatar={route.name === 'settings' ? userAvatar : undefined}
               onPress={() => {
                 const event = navigation.emit({
                   type: 'tabPress',

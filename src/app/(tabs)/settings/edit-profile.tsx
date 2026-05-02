@@ -20,7 +20,7 @@ export default function EditProfileScreen() {
   const navigation = useNavigation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, refreshUser, updateAvatarUrl } = useAuth();
+  const { user, refreshUser, updateAvatarUrl, setAddingAccount, logout } = useAuth();
 
   const nameParts = (user?.displayName || '').split(' ');
   const [firstName, setFirstName] = useState(nameParts[0] || '');
@@ -155,12 +155,24 @@ export default function EditProfileScreen() {
 
   const handleCancel = () => router.replace('/(tabs)/settings');
 
+  const handleAddAccount = () => {
+    setAddingAccount(true);
+    router.push('/(auth)/phone');
+  };
+
   const confirmLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await signOutUser();
-      router.replace('/(auth)/welcome');
+      const hasOther = await logout(); // Use logout from AuthContext
+      if (!hasOther) {
+        router.replace('/(auth)/welcome');
+      } else {
+        setShowLogout(false);
+        router.replace('/(tabs)/settings');
+      }
     } catch {
+      // Ignored
+    } finally {
       setIsLoggingOut(false);
     }
   };
@@ -314,7 +326,7 @@ export default function EditProfileScreen() {
 
             {/* ── Add account ─────────────────────────────── */}
             <View style={[s.card, { marginTop: 20 }]}>
-              <TouchableOpacity style={s.centeredRow} activeOpacity={0.6}>
+              <TouchableOpacity style={s.centeredRow} activeOpacity={0.6} onPress={handleAddAccount}>
                 <Text style={s.blueText}>Thêm tài khoản khác</Text>
               </TouchableOpacity>
             </View>
@@ -361,14 +373,23 @@ export default function EditProfileScreen() {
       <Modal visible={showLogout} transparent animationType="fade" onRequestClose={() => setShowLogout(false)}>
         <View style={s.logoutOverlay}>
           <View style={s.logoutCard}>
-            <Text style={s.logoutTitle}>Đăng xuất</Text>
-            <Text style={s.logoutSub}>Bạn có chắc muốn đăng xuất không?</Text>
-            <TouchableOpacity style={s.logoutBtn} onPress={confirmLogout} disabled={isLoggingOut}>
-              <Text style={s.logoutBtnText}>{isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.logoutCancelBtn} onPress={() => setShowLogout(false)}>
-              <Text style={s.logoutCancelText}>Hủy</Text>
-            </TouchableOpacity>
+            <Text style={s.logoutTitle}>Đăng xuất?</Text>
+            <Text style={s.logoutSub}>
+              Điều này sẽ hủy mọi chat bí mật.{'\n\n'}
+              Bạn có thể dùng Telegram trên mọi thiết bị cùng lúc và nhiều tài khoản trong cùng một ứng dụng.
+            </Text>
+            <View style={s.logoutBtnRow}>
+              <TouchableOpacity style={s.logoutCancelBtn} onPress={() => setShowLogout(false)}>
+                <Text style={s.logoutCancelText}>Hủy bỏ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.logoutConfirmBtn} onPress={confirmLogout} disabled={isLoggingOut}>
+                {isLoggingOut ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={s.logoutConfirmText}>OK</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -437,11 +458,12 @@ const s = StyleSheet.create({
 
   // Logout modal
   logoutOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
-  logoutCard: { backgroundColor: WHITE, borderRadius: 20, padding: 28, width: '78%', alignItems: 'center' },
-  logoutTitle: { fontSize: 20, fontWeight: '700', color: '#000', marginBottom: 8 },
-  logoutSub: { fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  logoutBtn: { backgroundColor: '#FF3B30', borderRadius: 14, paddingVertical: 14, width: '100%', alignItems: 'center', marginBottom: 10 },
-  logoutBtnText: { fontSize: 17, fontWeight: '600', color: WHITE },
-  logoutCancelBtn: { backgroundColor: '#F2F2F7', borderRadius: 14, paddingVertical: 14, width: '100%', alignItems: 'center' },
-  logoutCancelText: { fontSize: 17, fontWeight: '600', color: BLUE },
+  logoutCard: { backgroundColor: WHITE, borderRadius: 20, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20, width: 310 },
+  logoutTitle: { fontSize: 20, fontWeight: '700', color: '#000', marginBottom: 12 },
+  logoutSub: { fontSize: 16, color: '#000', lineHeight: 22, marginBottom: 24 },
+  logoutBtnRow: { flexDirection: 'row', gap: 12 },
+  logoutCancelBtn: { flex: 1, backgroundColor: '#E5E5EA', borderRadius: 20, paddingVertical: 14, alignItems: 'center' },
+  logoutCancelText: { fontSize: 17, fontWeight: '500', color: '#000' },
+  logoutConfirmBtn: { flex: 1, backgroundColor: '#3b82f6', borderRadius: 20, paddingVertical: 14, alignItems: 'center' },
+  logoutConfirmText: { fontSize: 17, fontWeight: '600', color: WHITE },
 });

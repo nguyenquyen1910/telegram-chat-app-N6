@@ -18,6 +18,7 @@ const FIXED_SMS_OTP = '123456';
 
 // Storage keys
 const AUTH_STORAGE_KEY = '@telegram_auth_user';
+const ACCOUNTS_STORAGE_KEY = '@telegram_auth_accounts';
 const SESSION_KEY = '@telegram_last_active';
 const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -65,6 +66,40 @@ export const refreshAuthUser = async (): Promise<void> => {
   emitAuthState(user);
 };
 
+// MULTI-ACCOUNT UTILS
+export const getSavedAccounts = async (): Promise<AuthUser[]> => {
+  try {
+    const stored = await AsyncStorage.getItem(ACCOUNTS_STORAGE_KEY);
+    if (!stored) return [];
+    return JSON.parse(stored) as AuthUser[];
+  } catch (e) {
+    return [];
+  }
+};
+
+const saveAccountToArray = async (user: AuthUser) => {
+  const accounts = await getSavedAccounts();
+  const index = accounts.findIndex(a => a.uid === user.uid);
+  if (index !== -1) {
+    accounts[index] = user;
+  } else {
+    accounts.push(user);
+  }
+  await AsyncStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+};
+
+export const switchActiveAccount = async (uid: string): Promise<AuthUser | null> => {
+  const accounts = await getSavedAccounts();
+  const target = accounts.find(a => a.uid === uid);
+  if (target) {
+    await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(target));
+    await updateLastActive();
+    emitAuthState(target);
+    return target;
+  }
+  return null;
+};
+
 const readStoredAuthUser = async (): Promise<AuthUser | null> => {
   const stores = await AsyncStorage.multiGet([AUTH_STORAGE_KEY, SESSION_KEY]);
   const stored = stores[0][1];
@@ -86,6 +121,9 @@ const readStoredAuthUser = async (): Promise<AuthUser | null> => {
   }
 
   const userData = JSON.parse(stored) as AuthUser;
+  // Make sure it's in the accounts array
+  await saveAccountToArray(userData);
+  
   await AsyncStorage.setItem(SESSION_KEY, Date.now().toString());
   console.log('[AUTH] User restored in session:', userData.uid);
   return userData;
@@ -275,6 +313,7 @@ export const registerUser = async (
 
   // Save to AsyncStorage for persistent login
   await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+  await saveAccountToArray(userData as AuthUser);
   await updateLastActive();
   emitAuthState(userData as AuthUser);
   return userData;
@@ -333,6 +372,7 @@ export const loginUser = async (phoneNumber: string): Promise<any> => {
 
   // Save to AsyncStorage
   await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+  await saveAccountToArray(userData as AuthUser);
   await updateLastActive();
   console.log(`[AUTH] User logged in: ${userData.uid}`);
   emitAuthState(userData as AuthUser);
@@ -366,6 +406,7 @@ export const changePhoneNumber = async (
       const userData = JSON.parse(stored) as AuthUser;
       const updated = { ...userData, phoneNumber: newPhone };
       await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+      await saveAccountToArray(updated);
       emitAuthState(updated);
     }
   } catch (e) {
@@ -394,6 +435,7 @@ export const changeDisplayName = async (
       const userData = JSON.parse(stored) as AuthUser;
       const updated = { ...userData, displayName: newDisplayName };
       await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+      await saveAccountToArray(updated);
       emitAuthState(updated);
     }
   } catch (e) {
@@ -403,18 +445,37 @@ export const changeDisplayName = async (
 
 // ============ LOGOUT & AUTH STATE ============
 
-// Logout
-export const signOutUser = async (): Promise<void> => {
-  await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-  await AsyncStorage.removeItem(SESSION_KEY);
-  if (auth) {
-    try {
-      await firebaseSignOut(auth);
-    } catch (e) {
-      // Ignore
+// Logout: Remove active user. If there are other accounts, switch to the first one. Otherwise completely sign out.
+export const signOutUser = async (): Promise<boolean> => {
+  const currentStore = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+  if (!currentStore) return false;
+  
+  const currentUser = JSON.parse(currentStore) as AuthUser;
+  let accounts = await getSavedAccounts();
+  accounts = accounts.filter(a => a.uid !== currentUser.uid);
+  
+  await AsyncStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+  
+  if (accounts.length > 0) {
+    // Has other accounts -> switch to the first one
+    const nextAccount = accounts[0];
+    await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAccount));
+    emitAuthState(nextAccount);
+    return true; // Still authenticated
+  } else {
+    // No more accounts -> full logout
+    await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+    await AsyncStorage.removeItem(SESSION_KEY);
+    if (auth) {
+      try {
+        await firebaseSignOut(auth);
+      } catch (e) {
+        // Ignore
+      }
     }
+    emitAuthState(null);
+    return false; // Logged out
   }
-  emitAuthState(null);
 };
 
 // Update last active timestamp (call this when app is active)
