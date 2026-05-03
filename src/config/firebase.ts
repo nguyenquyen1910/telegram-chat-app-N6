@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { initializeAuth, getAuth, getReactNativePersistence, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getFunctions, Functions } from 'firebase/functions';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -20,6 +21,7 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
+let functions: Functions | null = null;
 
 if (hasValidConfig) {
   try {
@@ -39,6 +41,7 @@ if (hasValidConfig) {
     // getFirestore và getStorage là idempotent (gọi bao nhiêu lần cũng OK)
     db = getFirestore(app);
     storage = getStorage(app);
+    functions = getFunctions(app);
 
     console.log('[Firebase] Initialized successfully. Project:', firebaseConfig.projectId);
   } catch (error) {
@@ -51,5 +54,5 @@ if (hasValidConfig) {
   );
 }
 
-export { auth, db, storage };
+export { auth, db, storage, functions };
 export default app;

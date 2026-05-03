@@ -20,7 +20,14 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.telegramchatapp",
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -38,11 +45,24 @@
             "imageWidth": 76
           }
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép truy cập camera để gọi video",
+          "microphonePermission": "Cho phép truy cập micro để gọi thoại"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e0253d60-8fb8-4b10-97fa-e7ed00ae23b9"
+      }
     }
   }
 }

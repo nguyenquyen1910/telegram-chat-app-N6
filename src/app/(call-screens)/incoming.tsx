@@ -19,6 +19,9 @@ import { db } from "@/config/firebase";
 import { updateCallStatus } from "@/services/callService";
 import { CallRecord } from "@/types/call";
 import { getRandomCallTheme } from "@/utils/callTheme";
+import { useLivekitRoom } from "@/hooks/useLivekitRoom";
+import { requestCallPermissions } from "@/utils/callPermissions";
+import { LiveKitRoom } from "@livekit/react-native";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const AVATAR_SIZE = 130;
@@ -74,18 +77,6 @@ function PulseRing({ delay }: { delay: number }) {
 }
 
 function RequestingText() {
-  const dotAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(dotAnim, {
-        toValue: 3,
-        duration: 1200,
-        useNativeDriver: false,
-      }),
-    ).start();
-  }, []);
-
   const [dots, setDots] = useState("·");
   useEffect(() => {
     const id = setInterval(() => {
@@ -135,89 +126,31 @@ function ControlBtn({
   );
 }
 
-export default function IncomingCallScreen() {
-  const { callId } = useLocalSearchParams<{ callId: string }>();
-  const router = useRouter();
-  const [call, setCall] = useState<CallRecord | null>(null);
-  const [isAccepting, setIsAccepting] = useState(false);
+function IncomingCallContent({
+  call,
+  onDecline,
+  onAccept,
+  isAccepting,
+  theme,
+  isPreview,
+  isVideo
+}: {
+  call: CallRecord,
+  onDecline: () => void,
+  onAccept: () => void,
+  isAccepting: boolean,
+  theme: any,
+  isPreview: boolean,
+  isVideo: boolean
+}) {
+  const {
+    isMuted,
+    isVideoEnabled,
+    toggleMute,
+    toggleVideo,
+  } = useLivekitRoom(null, "", false);
+
   const [isSpeaker, setIsSpeaker] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-
-  const isPreview = callId === "PREVIEW";
-
-  const theme = useMemo(() => getRandomCallTheme(), []);
-
-  useEffect(() => {
-    if (isPreview) {
-      Vibration.vibrate(VIBRATION_PATTERN, true);
-      setCall({
-        id: "preview",
-        callerId: "uid_valverde_seed",
-        calleeId: "me",
-        callerName: "Federico Valverde",
-        calleeName: "Me",
-        callerAvatar: "@/assets/images/valverde.jpg",
-        calleeAvatar: "",
-        type: "voice",
-        status: "ringing",
-        startedAt: null,
-        endedAt: null,
-        duration: 0,
-        livekitRoomName: "",
-        createdAt: null as any,
-      });
-      return () => Vibration.cancel();
-    }
-    Vibration.vibrate(VIBRATION_PATTERN, true);
-    return () => Vibration.cancel();
-  }, [isPreview]);
-
-  useEffect(() => {
-    if (isPreview) return;
-    if (!callId || !db) return;
-    const unsub = onSnapshot(doc(db, "calls", callId), (snap) => {
-      if (!snap.exists()) {
-        router.back();
-        return;
-      }
-      const data = { id: snap.id, ...snap.data() } as CallRecord;
-      setCall(data);
-      if (data.status === "ended" || data.status === "declined") router.back();
-    });
-    return unsub;
-  }, [callId]);
-
-  useEffect(() => {
-    if (isPreview) return;
-    const t = setTimeout(async () => {
-      if (callId) {
-        await updateCallStatus(callId, "missed");
-        router.back();
-      }
-    }, 30_000);
-    return () => clearTimeout(t);
-  }, [callId]);
-
-  const handleDecline = async () => {
-    Vibration.cancel();
-    if (!isPreview && callId) await updateCallStatus(callId, "declined");
-    router.back();
-  };
-
-  const handleAccept = async () => {
-    if (isPreview) {
-      console.log("[Preview] Accept tapped");
-      return;
-    }
-    if (!callId || isAccepting) return;
-    setIsAccepting(true);
-    Vibration.cancel();
-    await updateCallStatus(callId, "accepted", { startedAt: true });
-    console.log("[Incoming] Accepted");
-  };
-
-  if (!call)
-    return <LinearGradient colors={theme.colors} style={{ flex: 1 }} />;
 
   return (
     <LinearGradient colors={theme.colors} style={styles.container}>
@@ -228,7 +161,7 @@ export default function IncomingCallScreen() {
       />
 
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={handleDecline} style={styles.backBtn}>
+        <TouchableOpacity onPress={onDecline} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
@@ -266,18 +199,24 @@ export default function IncomingCallScreen() {
             label="speaker"
             onPress={() => setIsSpeaker(!isSpeaker)}
           />
-          <ControlBtn icon="videocam" label="video" onPress={() => {}} />
+          {isVideo && (
+            <ControlBtn 
+              icon={isVideoEnabled ? "videocam" : "videocam-off"} 
+              label="video" 
+              onPress={toggleVideo} 
+            />
+          )}
           <ControlBtn
-            icon="mic-off"
+            icon={isMuted ? "mic-off" : "mic"}
             label="mute"
-            onPress={() => setIsMuted(!isMuted)}
+            onPress={toggleMute}
           />
-          <ControlBtn icon="close" label="end" red onPress={handleDecline} />
+          <ControlBtn icon="close" label="end" red onPress={onDecline} />
         </View>
 
         <TouchableOpacity
           style={[styles.acceptBtn, isAccepting && { opacity: 0.6 }]}
-          onPress={handleAccept}
+          onPress={onAccept}
           disabled={isAccepting}
           activeOpacity={0.8}
         >
@@ -292,6 +231,106 @@ export default function IncomingCallScreen() {
         </Text>
       </View>
     </LinearGradient>
+  );
+}
+
+export default function IncomingCallScreen() {
+  const { callId } = useLocalSearchParams<{ callId: string }>();
+  const router = useRouter();
+  const [call, setCall] = useState<CallRecord | null>(null);
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
+
+  const isPreview = callId === "PREVIEW";
+  const isCallAccepted = call?.status === "accepted";
+  const isVideo = call?.type === "video";
+
+  const { token, disconnect } = useLivekitRoom(
+    isCallAccepted && permissionsGranted ? call?.livekitRoomName || null : null,
+    call?.calleeName || "Callee",
+    isCallAccepted && permissionsGranted
+  );
+
+  const theme = useMemo(() => getRandomCallTheme(), []);
+
+  useEffect(() => {
+    if (isPreview) {
+      Vibration.vibrate(VIBRATION_PATTERN, true);
+      setCall({
+        id: "preview",
+        callerId: "uid_valverde_seed",
+        calleeId: "me",
+        callerName: "Federico Valverde",
+        calleeName: "Me",
+        callerAvatar: "@/assets/images/valverde.jpg",
+        calleeAvatar: "",
+        type: "voice",
+        status: "ringing",
+        startedAt: null,
+        endedAt: null,
+        duration: 0,
+        livekitRoomName: "",
+        createdAt: null as any,
+      });
+      return () => Vibration.cancel();
+    }
+    Vibration.vibrate(VIBRATION_PATTERN, true);
+    return () => Vibration.cancel();
+  }, [isPreview]);
+
+  useEffect(() => {
+    if (isPreview) return;
+    if (!callId || !db) return;
+    const unsub = onSnapshot(doc(db, "calls", callId), (snap) => {
+      if (!snap.exists()) { router.back(); return; }
+      const data = { id: snap.id, ...snap.data() } as CallRecord;
+      setCall(data);
+      if (data.status === "ended" || data.status === "declined") router.back();
+    });
+    return unsub;
+  }, [callId]);
+
+  const handleDecline = async () => {
+    Vibration.cancel();
+    disconnect();
+    if (!isPreview && callId) await updateCallStatus(callId, "declined");
+    router.back();
+  };
+
+  const handleAccept = async () => {
+    if (isPreview) return;
+    if (!callId || isAccepting) return;
+    const hasPermissions = await requestCallPermissions(isVideo);
+    if (!hasPermissions) return;
+
+    setIsAccepting(true);
+    setPermissionsGranted(true);
+    Vibration.cancel();
+    await updateCallStatus(callId, "accepted", { startedAt: true });
+  };
+
+  if (!call) return <LinearGradient colors={theme.colors} style={{ flex: 1 }} />;
+
+  const url = process.env.EXPO_PUBLIC_LIVEKIT_URL!;
+
+  return (
+    <LiveKitRoom
+      serverUrl={url}
+      token={token || ""}
+      connect={!!token && isCallAccepted && permissionsGranted}
+      audio={true}
+      video={isVideo}
+    >
+      <IncomingCallContent 
+        call={call}
+        onDecline={handleDecline}
+        onAccept={handleAccept}
+        isAccepting={isAccepting}
+        theme={theme}
+        isPreview={isPreview}
+        isVideo={isVideo}
+      />
+    </LiveKitRoom>
   );
 }
 

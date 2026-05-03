@@ -18,17 +18,14 @@ import { db } from "@/config/firebase";
 import { updateCallStatus } from "@/services/callService";
 import { CallRecord } from "@/types/call";
 import { getRandomCallTheme } from "@/utils/callTheme";
+import { useLivekitRoom } from "@/hooks/useLivekitRoom";
+import { requestCallPermissions } from "@/utils/callPermissions";
+import { LiveKitRoom } from "@livekit/react-native";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const AVATAR_SIZE = 130;
 
-function PulseRing({
-  delay,
-  color,
-}: {
-  delay: number;
-  color: string;
-}) {
+function PulseRing({ delay, color }: { delay: number; color: string }) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -46,14 +43,20 @@ function PulseRing({
           duration: 0,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
     loop.start();
     return () => loop.stop();
   }, []);
 
-  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.65] });
-  const opacity = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.25, 0] });
+  const scale = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.65],
+  });
+  const opacity = anim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.5, 0.25, 0],
+  });
 
   return (
     <Animated.View
@@ -88,7 +91,11 @@ function ControlBtn({
 }) {
   const bg = red ? "#FF3B30" : "rgba(255,255,255,0.18)";
   return (
-    <TouchableOpacity style={styles.controlBtn} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.controlBtn}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
       <View style={[styles.controlCircle, { backgroundColor: bg }]}>
         {iconLib === "material" ? (
           <MaterialIcons name={icon as any} size={26} color="#fff" />
@@ -101,93 +108,51 @@ function ControlBtn({
   );
 }
 
-export default function OutgoingCallScreen() {
-  const { callId } = useLocalSearchParams<{ callId: string }>();
-  const router = useRouter();
-  const isPreview = callId === 'PREVIEW';
+function OutgoingCallContent({
+  call,
+  onCancel,
+  gradColors,
+  rippleColor,
+  elapsed,
+  statusText,
+  isVideo,
+}: {
+  call: CallRecord;
+  onCancel: () => void;
+  gradColors: [string, string, string];
+  rippleColor: string;
+  elapsed: number | null;
+  statusText: string;
+  isVideo: boolean;
+}) {
+  const { isMuted, isVideoEnabled, toggleMute, toggleVideo } = useLivekitRoom(
+    null,
+    "",
+    false,
+  );
 
-  const MOCK_CALL: CallRecord = {
-    id: 'preview',
-    callerId: 'me',
-    calleeId: 'uid_mbappe_seed',
-    callerName: 'Me',
-    calleeName: 'Kylian Mbappé',
-    callerAvatar: '',
-    calleeAvatar: 'https://res.cloudinary.com/dvfwvnq88/image/upload/v1777688800/geg3cpf35hzhzx32r6i2.png',
-    type: 'voice',
-    status: 'ringing',
-    startedAt: null,
-    endedAt: null,
-    duration: 0,
-    livekitRoomName: '',
-    createdAt: null as any,
-  };
-
-  const [call, setCall] = useState<CallRecord | null>(isPreview ? MOCK_CALL : null);
-  const [statusText, setStatusText] = useState("Requesting");
-  const [elapsed, setElapsed] = useState<number | null>(null);
   const [isSpeaker, setIsSpeaker] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (isPreview) return; // Không fetch Firestore khi preview
-    if (!callId || !db) return;
-    const unsub = onSnapshot(doc(db, "calls", callId), (snap) => {
-      if (!snap.exists()) { router.back(); return; }
-      const data = { id: snap.id, ...snap.data() } as CallRecord;
-      setCall(data);
-      if (data.status === "accepted") {
-        setStatusText("");
-        if (!timerRef.current) {
-          const start = Date.now();
-          timerRef.current = setInterval(() => {
-            setElapsed(Math.floor((Date.now() - start) / 1000));
-          }, 1000);
-        }
-      } else if (data.status === "declined") {
-        setStatusText("Đã từ chối");
-        setTimeout(() => router.back(), 1500);
-      } else if (data.status === "missed" || data.status === "ended") {
-        router.back();
-      }
-    });
-    return () => { unsub(); timerRef.current && clearInterval(timerRef.current); };
-  }, [callId]);
-
-  useEffect(() => {
-    if (isPreview) return; // Không auto missed khi đang preview
-    const t = setTimeout(async () => {
-      if (callId) { await updateCallStatus(callId, "missed"); router.back(); }
-    }, 30_000);
-    return () => clearTimeout(t);
-  }, [callId]);
-
-  const handleCancel = async () => {
-    if (!isPreview && callId) await updateCallStatus(callId, "ended");
-    router.back();
-  };
 
   const formatElapsed = (s: number) => {
-    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const m = Math.floor(s / 60)
+      .toString()
+      .padStart(2, "0");
     const sec = (s % 60).toString().padStart(2, "0");
     return `${m}:${sec}`;
   };
 
-  const theme = useMemo(() => getRandomCallTheme(), []);
-
   const isActive = elapsed !== null;
-  const gradColors = isActive ? ["#1E6B5B", "#2D8B6A", "#4BA882"] as [string,string,string] : theme.colors;
-  const rippleColor = isActive ? "rgba(100,220,170,0.45)" : theme.ripple;
-
-  if (!call) return <LinearGradient colors={gradColors} style={{ flex: 1 }} />;
 
   return (
     <LinearGradient colors={gradColors} style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={handleCancel} style={styles.backBtn}>
+        <TouchableOpacity onPress={onCancel} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
@@ -195,8 +160,8 @@ export default function OutgoingCallScreen() {
 
       <View style={styles.avatarSection}>
         <View style={styles.rippleWrapper}>
-          <PulseRing delay={0}    color={rippleColor} />
-          <PulseRing delay={600}  color={rippleColor} />
+          <PulseRing delay={0} color={rippleColor} />
+          <PulseRing delay={600} color={rippleColor} />
           <PulseRing delay={1200} color={rippleColor} />
           {call.calleeAvatar ? (
             <Image source={{ uri: call.calleeAvatar }} style={styles.avatar} />
@@ -214,7 +179,11 @@ export default function OutgoingCallScreen() {
         <View style={styles.statusRow}>
           {isActive ? (
             <>
-              <Ionicons name="cellular" size={14} color="rgba(255,255,255,0.8)" />
+              <Ionicons
+                name="cellular"
+                size={14}
+                color="rgba(255,255,255,0.8)"
+              />
               <Text style={styles.statusText}> {formatElapsed(elapsed!)}</Text>
             </>
           ) : (
@@ -230,16 +199,138 @@ export default function OutgoingCallScreen() {
           onPress={() => setIsSpeaker(!isSpeaker)}
           active={isSpeaker}
         />
-        <ControlBtn icon="videocam" label="video" onPress={() => {}} />
+        {isVideo && (
+          <ControlBtn
+            icon={isVideoEnabled ? "videocam" : "videocam-off"}
+            label="video"
+            onPress={toggleVideo}
+            active={!isVideoEnabled}
+          />
+        )}
         <ControlBtn
-          icon={isMuted ? "mic-off" : "mic-off"}
+          icon={isMuted ? "mic-off" : "mic"}
           label="mute"
-          onPress={() => setIsMuted(!isMuted)}
+          onPress={toggleMute}
           active={isMuted}
         />
-        <ControlBtn icon="close" label="end" red onPress={handleCancel} />
+        <ControlBtn icon="close" label="end" red onPress={onCancel} />
       </View>
     </LinearGradient>
+  );
+}
+
+export default function OutgoingCallScreen() {
+  const { callId } = useLocalSearchParams<{ callId: string }>();
+  const router = useRouter();
+  const isPreview = callId === "PREVIEW";
+
+  const MOCK_CALL: CallRecord = {
+    id: "preview",
+    callerId: "me",
+    calleeId: "uid_mbappe_seed",
+    callerName: "Me",
+    calleeName: "Kylian Mbappé",
+    callerAvatar: "",
+    calleeAvatar:
+      "https://res.cloudinary.com/dvfwvnq88/image/upload/v1777688800/geg3cpf35hzhzx32r6i2.png",
+    type: "voice",
+    status: "ringing",
+    startedAt: null,
+    endedAt: null,
+    duration: 0,
+    livekitRoomName: "",
+    createdAt: null as any,
+  };
+
+  const [call, setCall] = useState<CallRecord | null>(
+    isPreview ? MOCK_CALL : null,
+  );
+  const [statusText, setStatusText] = useState("Requesting");
+  const [elapsed, setElapsed] = useState<number | null>(null);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isCallAccepted = call?.status === "accepted";
+  const isVideo = call?.type === "video";
+
+  const { token, disconnect } = useLivekitRoom(
+    isCallAccepted && permissionsGranted ? call?.livekitRoomName || null : null,
+    call?.callerName || "Caller",
+    isCallAccepted && permissionsGranted,
+  );
+
+  useEffect(() => {
+    if (isCallAccepted && !permissionsGranted) {
+      requestCallPermissions(isVideo).then(setPermissionsGranted);
+    }
+  }, [isCallAccepted, isVideo]);
+
+  useEffect(() => {
+    if (isPreview) return;
+    if (!callId || !db) return;
+    const unsub = onSnapshot(doc(db, "calls", callId), (snap) => {
+      if (!snap.exists()) {
+        router.back();
+        return;
+      }
+      const data = { id: snap.id, ...snap.data() } as CallRecord;
+      setCall(data);
+      if (data.status === "accepted") {
+        setStatusText("");
+        if (!timerRef.current) {
+          const start = Date.now();
+          timerRef.current = setInterval(() => {
+            setElapsed(Math.floor((Date.now() - start) / 1000));
+          }, 1000);
+        }
+      } else if (data.status === "declined") {
+        setStatusText("Đã từ chối");
+        setTimeout(() => router.back(), 1500);
+      } else if (data.status === "missed" || data.status === "ended") {
+        router.back();
+      }
+    });
+    return () => {
+      unsub();
+      timerRef.current && clearInterval(timerRef.current);
+    };
+  }, [callId]);
+
+  const handleCancel = async () => {
+    disconnect();
+    if (!isPreview && callId) await updateCallStatus(callId, "ended");
+    router.back();
+  };
+
+  const theme = useMemo(() => getRandomCallTheme(), []);
+  const isActive = elapsed !== null;
+  const gradColors = isActive
+    ? (["#1E6B5B", "#2D8B6A", "#4BA882"] as [string, string, string])
+    : theme.colors;
+  const rippleColor = isActive ? "rgba(100,220,170,0.45)" : theme.ripple;
+
+  if (!call) return <LinearGradient colors={gradColors} style={{ flex: 1 }} />;
+
+  const url = process.env.EXPO_PUBLIC_LIVEKIT_URL!;
+
+  return (
+    <LiveKitRoom
+      serverUrl={url}
+      token={token || ""}
+      connect={!!token && isCallAccepted && permissionsGranted}
+      audio={true}
+      video={isVideo}
+    >
+      <OutgoingCallContent
+        call={call}
+        onCancel={handleCancel}
+        gradColors={gradColors}
+        rippleColor={rippleColor}
+        elapsed={elapsed}
+        statusText={statusText}
+        isVideo={isVideo}
+      />
+    </LiveKitRoom>
   );
 }
 
@@ -284,7 +375,12 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.35)",
   },
   avatarInitial: { fontSize: 52, color: "#fff", fontWeight: "700" },
-  calleeName: { fontSize: 28, fontWeight: "700", color: "#FFFFFF", letterSpacing: 0.3 },
+  calleeName: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
+  },
   statusRow: { flexDirection: "row", alignItems: "center" },
   statusText: { fontSize: 16, color: "rgba(255,255,255,0.75)" },
 
